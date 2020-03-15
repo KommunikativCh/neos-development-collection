@@ -6,7 +6,7 @@
     ],
     "type": "neos-package-collection",
     "require": {
-        "neos/flow-development-collection": "^6.1",
+        "neos/flow-development-collection": "dev-master",
         "neos/neos-setup": "^1.0",
         "neos/flow": "*",
         "neos/cache": "*",
@@ -31,7 +31,7 @@
         "neos/fusion-afx": "*",
         "neos/fusion-form": "*",
         "neos/form": "*",
-        "neos/kickstarter": "~6.1.0"
+        "neos/kickstarter": "dev-master "
     },
     "replace": {
         "typo3/typo3cr": "self.version",
