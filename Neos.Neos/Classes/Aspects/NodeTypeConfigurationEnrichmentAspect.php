@@ -14,9 +14,8 @@ namespace Neos\Neos\Aspects;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Aop\JoinPointInterface;
 use Neos\Flow\ResourceManagement\ResourceManager;
-use Neos\Neos\Service\IconNameMappingService;
 use Neos\Utility\Arrays;
-use Neos\Neos\Exception;
+use Neos\ContentRepository\Domain\Model\NodeType;
 
 /**
  * @Flow\Scope("singleton")
@@ -50,40 +49,17 @@ class NodeTypeConfigurationEnrichmentAspect
     protected $resourceManager;
 
     /**
-     * @Flow\Inject
-     * @var IconNameMappingService
-     */
-    protected $iconNameMappingService;
-
-    /**
-     * @Flow\Around("method(Neos\ContentRepository\Domain\Model\NodeType->setFullConfiguration())")
-     * @param JoinPointInterface $joinPoint
-     * @return void
-     * @throws Exception
-     */
-    public function enrichNodeTypeConfiguration(JoinPointInterface $joinPoint)
-    {
-        $configuration = $joinPoint->getMethodArgument('fullConfiguration');
-        $nodeTypeName = $joinPoint->getProxy()->getName();
-
-        $this->addEditorDefaultsToNodeTypeConfiguration($nodeTypeName, $configuration);
-        $this->mapIconNames($configuration);
-
-        $joinPoint->setMethodArgument('fullConfiguration', $configuration);
-        $joinPoint->getAdviceChain()->proceed($joinPoint);
-    }
-
-    /**
      * @Flow\Around("method(Neos\ContentRepository\Domain\Model\NodeType->__construct())")
      * @param JoinPointInterface $joinPoint
      * @return void
      */
     public function enrichNodeTypeLabelsConfiguration(JoinPointInterface $joinPoint): void
     {
+        $declaredSuperTypes = $joinPoint->getMethodArgument('declaredSuperTypes');
         $configuration = $joinPoint->getMethodArgument('configuration');
         $nodeTypeName = $joinPoint->getMethodArgument('name');
 
-        $this->addLabelsToNodeTypeConfiguration($nodeTypeName, $configuration);
+        $this->addLabelsToNodeTypeConfiguration($nodeTypeName, $configuration, $declaredSuperTypes);
 
         $joinPoint->setMethodArgument('configuration', $configuration);
         $joinPoint->getAdviceChain()->proceed($joinPoint);
@@ -92,103 +68,27 @@ class NodeTypeConfigurationEnrichmentAspect
     /**
      * @param string $nodeTypeName
      * @param array $configuration
+     * @param array $declaredSuperTypes
      * @return void
      */
-    protected function addLabelsToNodeTypeConfiguration($nodeTypeName, array &$configuration)
+    protected function addLabelsToNodeTypeConfiguration($nodeTypeName, array &$configuration, array $declaredSuperTypes)
     {
         if (isset($configuration['ui'])) {
             $this->setGlobalUiElementLabels($nodeTypeName, $configuration);
         }
 
         if (isset($configuration['properties'])) {
-            $this->setPropertyLabels($nodeTypeName, $configuration);
-        }
-    }
-
-    /**
-     * Map all icon- prefixed icon names to the corresponding
-     * names in the used icon implementation
-     *
-     * @param array $configuration
-     */
-    protected function mapIconNames(array &$configuration)
-    {
-        if (isset($configuration['ui']['icon'])) {
-            $configuration['ui']['icon'] = $this->iconNameMappingService->convert($configuration['ui']['icon']);
-        }
-
-        $inspectorConfiguration = Arrays::getValueByPath($configuration, 'ui.inspector');
-        if (is_array($inspectorConfiguration)) {
-            foreach ($inspectorConfiguration as $elementTypeName => $elementTypeItems) {
-                foreach ($elementTypeItems as $elementName => $elementConfiguration) {
-                    if (isset($inspectorConfiguration[$elementTypeName][$elementName]['icon'])) {
-                        $configuration['ui']['inspector'][$elementTypeName][$elementName]['icon'] = $this->iconNameMappingService->convert($inspectorConfiguration[$elementTypeName][$elementName]['icon']);
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * @param string $nodeTypeName
-     * @param array $configuration
-     * @throws Exception
-     * @return void
-     */
-    protected function addEditorDefaultsToNodeTypeConfiguration($nodeTypeName, array &$configuration)
-    {
-        if (isset($configuration['properties']) && is_array($configuration['properties'])) {
-            foreach ($configuration['properties'] as $propertyName => &$propertyConfiguration) {
-                if (!isset($propertyConfiguration['type'])) {
-                    continue;
-                }
-
-                $type = $propertyConfiguration['type'];
-
-                if (!isset($this->dataTypesDefaultConfiguration[$type])) {
-                    continue;
-                }
-
-                if (!isset($propertyConfiguration['ui']['inspector'])) {
-                    continue;
-                }
-
-                $defaultConfigurationFromDataType = $this->dataTypesDefaultConfiguration[$type];
-
-                // FIRST STEP: Figure out which editor should be used
-                // - Default: editor as configured from the data type
-                // - Override: editor as configured from the property configuration.
-                if (isset($propertyConfiguration['ui']['inspector']['editor'])) {
-                    $editor = $propertyConfiguration['ui']['inspector']['editor'];
-                } elseif (isset($defaultConfigurationFromDataType['editor'])) {
-                    $editor = $defaultConfigurationFromDataType['editor'];
-                } else {
-                    throw new Exception('Could not find editor for ' . $propertyName . ' in node type ' . $nodeTypeName, 1436809123);
-                }
-
-                // SECOND STEP: Build up the full inspector configuration by merging:
-                // - take configuration from editor defaults
-                // - take configuration from dataType
-                // - take configuration from properties (NodeTypes)
-                $mergedInspectorConfiguration = [];
-                if (isset($this->editorDefaultConfiguration[$editor])) {
-                    $mergedInspectorConfiguration = $this->editorDefaultConfiguration[$editor];
-                }
-
-                $mergedInspectorConfiguration = Arrays::arrayMergeRecursiveOverrule($mergedInspectorConfiguration, $defaultConfigurationFromDataType);
-                $mergedInspectorConfiguration = Arrays::arrayMergeRecursiveOverrule($mergedInspectorConfiguration, $propertyConfiguration['ui']['inspector']);
-                $propertyConfiguration['ui']['inspector'] = $mergedInspectorConfiguration;
-                $propertyConfiguration['ui']['inspector']['editor'] = $editor;
-            }
+            $this->setPropertyLabels($nodeTypeName, $configuration, $declaredSuperTypes);
         }
     }
 
     /**
      * @param string $nodeTypeLabelIdPrefix
      * @param array $configuration
+     * @param array $declaredSuperTypes
      * @return void
      */
-    protected function setPropertyLabels($nodeTypeName, array &$configuration)
+    protected function setPropertyLabels($nodeTypeName, array &$configuration, array $declaredSuperTypes)
     {
         $nodeTypeLabelIdPrefix = $this->generateNodeTypeLabelIdPrefix($nodeTypeName);
         foreach ($configuration['properties'] as $propertyName => &$propertyConfiguration) {
@@ -200,15 +100,22 @@ class NodeTypeConfigurationEnrichmentAspect
                 $propertyConfiguration['ui']['label'] = $this->getPropertyLabelTranslationId($nodeTypeLabelIdPrefix, $propertyName);
             }
 
-            if (isset($propertyConfiguration['ui']['inspector']['editor']) && isset($propertyConfiguration['ui']['inspector']['editorOptions'])) {
+            $editorName = $propertyConfiguration['ui']['inspector']['editor']
+                ?? array_reduce($declaredSuperTypes, function ($editorName, ?NodeType $superType) use ($propertyName) {
+                    if ($editorName !== null || $superType === null) {
+                        return $editorName;
+                    }
+                    $superTypeConfiguration = $superType->getLocalConfiguration();
+                    return $superTypeConfiguration['properties'][$propertyName]['ui']['inspector']['editor'] ?? null;
+                }, null);
+            $hasEditor = !is_null($editorName);
+            $hasEditorOptions = isset($propertyConfiguration['ui']['inspector']['editorOptions']);
+
+            if ($hasEditor && $hasEditorOptions) {
                 $translationIdGenerator = function ($path) use ($nodeTypeLabelIdPrefix, $propertyName) {
                     return $this->getPropertyConfigurationTranslationId($nodeTypeLabelIdPrefix, $propertyName, $path);
                 };
-                $this->applyEditorLabels($nodeTypeLabelIdPrefix, $propertyName, $propertyConfiguration['ui']['inspector']['editor'], $propertyConfiguration['ui']['inspector']['editorOptions'], $translationIdGenerator);
-            }
-
-            if (isset($propertyConfiguration['ui']['aloha']) && $this->shouldFetchTranslation($propertyConfiguration['ui']['aloha'], 'placeholder')) {
-                $propertyConfiguration['ui']['aloha']['placeholder'] = $this->getPropertyConfigurationTranslationId($nodeTypeLabelIdPrefix, $propertyName, 'aloha.placeholder');
+                $this->applyEditorLabels($nodeTypeLabelIdPrefix, $propertyName, $editorName, $propertyConfiguration['ui']['inspector']['editorOptions'], $translationIdGenerator);
             }
 
             if (isset($propertyConfiguration['ui']['inline']['editorOptions']) && $this->shouldFetchTranslation($propertyConfiguration['ui']['inline']['editorOptions'], 'placeholder')) {
@@ -344,7 +251,7 @@ class NodeTypeConfigurationEnrichmentAspect
                     };
                     $this->applyEditorLabels($nodeTypeLabelIdPrefix, $elementName, $elementConfiguration['ui']['editor'], $elementConfiguration['ui']['editorOptions'], $translationIdGenerator);
                 }
-                if (!is_array($elementConfiguration) || !$this->shouldFetchTranslation($elementConfiguration['ui'])) {
+                if (!is_array($elementConfiguration) || !$this->shouldFetchTranslation($elementConfiguration['ui'] ?? [])) {
                     continue;
                 }
                 $elementConfiguration['ui']['label'] = $this->getInspectorElementTranslationId($nodeTypeLabelIdPrefix, 'creationDialog', $elementName);

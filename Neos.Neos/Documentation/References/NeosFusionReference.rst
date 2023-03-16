@@ -308,41 +308,89 @@ Example::
 
   # the initial value is not changed, so you can define the Debug prototype anywhere in your Fusion code
 
+.. _Neos_Fusion__DebugConsole:
+
+Neos.Fusion:DebugConsole
+-----------------
+
+Wraps the given value with a script tag to print it to the browser console.
+When used as process the script tag is appended to the processed value.
+
+:title: (optional) Title for the debug output
+:value: (mixed) The value to print to the console
+:method: (string, optional) The method to call on the browser console object
+:[key]: (mixed) Other arguments to pass to the console method
+
+Example::
+
+  renderer.@process.debug = Neos.Fusion:Debug.Console {
+    title = 'My props'
+    value = ${props}
+    method = 'table'
+  }
+
+Multiple values::
+
+  renderer.@process.debug = Neos.Fusion:Debug.Console {
+    value = ${props.foo}
+    otherValue = ${props.other}
+    thirdValue = ${props.third}
+  }
+
+Color usage::
+
+  renderer.@process.debug = Neos.Fusion:Debug.Console {
+    value = ${'%c' + node.identifier}
+    color = 'color: red'
+  }
 
 .. _Neos_Fusion__Component:
 
 Neos.Fusion:Component
 ---------------------
 
-Create a component that adds all properties to the props context and afterward evaluates the renderer.
+Create a component
 
+:[key]: (mixed) The public API of your component: Lazy evaluated props that will be available inside the current component's scope under the context ``props`` (is iterable)
+:@private.[key]: (mixed) Can only be set inside the root component declaration: Lazy evaluated private props that will be available inside the current component's scope under the context ``private`` (is not iterable / is only a proxy)
 :renderer: (mixed, **required**) The value which gets rendered
+
+.. note:: The context ``props`` and ``private`` is only available in the components scope
+   The component's scope will be available inside the `renderer` and `@private` and will extend inwards until inside another component's renderer
+   That means inside `@private` it's even allowed to reference another private prop (be carefully of circular references, though!)
+   But normal props are not inside the component's scope and thus cannot reference each other or ``private``
 
 Example::
 
-	prototype(Vendor.Site:Component) < prototype(Neos.Fusion:Component) {
-		title = 'Hello World'
-		titleTagName = 'h1'
-		description = 'Description of the Neos World'
-		bold = false
+  prototype(Vendor.Site:Component) < prototype(Neos.Fusion:Component) {
+      title = 'Hello World'
+      titleTagName = 'h1'
+      bold = false
 
-		renderer = Neos.Fusion:Tag {
-			attributes.class = Neos.Fusion:DataStructure {
-				component = 'component'
-				bold = ${props.bold ? 'component--bold' : false}
-			}
-			content = Neos.Fusion:Join {
-				headline = Neos.Fusion:Tag {
-					tagName = ${props.titleTagName}
-					content = ${props.title}
-				}
+      @private {
+          computedTitle = ${String.toLowercase(props.title)}
+          funnyTitle = Neos.Fusion:Value {
+              value = ${props.titleTagName + " " + private.computedTitle}
+          }
+      }
 
-				description = Neos.Fusion:Tag {
-						content = ${props.description}
-				}
-			}
-		}
-	}
+      renderer = Neos.Fusion:Tag {
+          attributes.class {
+              component = 'component'
+              bold = ${props.bold && 'component--bold'}
+          }
+          content = Neos.Fusion:Join {
+              headline = Neos.Fusion:Tag {
+                  tagName = ${props.titleTagName}
+                  content = ${private.funnyTitle}
+              }
+              // nestedComponentScope = Neos.Fusion:Component {
+              //   prop1 = ${props.title} // works
+              //   renderer = ${props.title} // doest work!
+              // }
+  			}
+      }
+  }
 
 .. _Neos_Fusion__Fragment:
 
@@ -449,6 +497,44 @@ Example::
 
 .. note:: Most of the time this can be simplified by directly assigning the value instead of using the ``Value`` object.
 
+.. _Neos_Fusion__Match:
+
+Neos.Fusion:Match
+-----------------
+
+Matches the given subject to a value
+
+:@subject: (string, **required**) The subject to match
+:@default: (mixed) The default to return when no match was found
+:[key]: (mixed) Definition list, the keys will be matched to the subject and their value returned.
+
+Example::
+
+	myValue = Neos.Fusion:Match {
+		@subject = 'hello'
+		@default = 'World?'
+		hello = 'Hello World'
+		bye = 'Goodbye world'
+	}
+
+.. note:: This can be used to simplify many usages of :ref:`Neos_Fusion__Case` when the subject is a string.
+
+.. _Neos_Fusion__Memo:
+
+Neos.Fusion:Memo
+-----------------
+
+Returns the result of previous calls with the same "discriminator"
+
+:discriminator: (string, **required**) Cache identifier
+:value: (mixed) The value to evaluate and store for future calls during rendering
+
+Example::
+
+  prototype(My.Vendor:Expensive.Calculation) < prototype(Neos.Fusion:Memo) {
+    discriminator = 'expensive-calculation'
+    value = ${1+2}
+  }
 
 .. _Neos_Fusion__RawArray:
 
@@ -582,6 +668,63 @@ A helper object to render the head of an HTTP response
 :statusCode: (integer) The HTTP status code for the response, defaults to ``200``
 :headers.*: (string) An HTTP header that should be set on the response, the property name (e.g. ``headers.Content-Type``) will be used for the header name
 
+.. _Neos_Fusion__ActionUri:
+
+Neos.Fusion:ActionUri
+---------------------
+
+Built a URI to a controller action
+
+:request: (ActionRequest, defaults to the the current ``request``) The action request the uri is build from.
+:package: (string) The package key (e.g. ``'My.Package'``)
+:subpackage: (string) The subpackage, empty by default
+:controller: (string) The controller name (e.g. ``'Registration'``)
+:action: (string) The action name (e.g. ``'new'``)
+:arguments: (array) Arguments to the action by named key
+:format: (string) An optional request format (e.g. ``'html'``)
+:section: (string) An optional fragment (hash) for the URI
+:additionalParams: (array) Additional URI query parameters by named key
+:addQueryString: (boolean) Whether to keep the query parameters of the current URI
+:argumentsToBeExcludedFromQueryString: (array) Query parameters to exclude for ``addQueryString``
+:absolute: (boolean) Whether to create an absolute URI
+
+Example::
+
+	uri = Neos.Fusion:ActionUri {
+		package = 'My.Package'
+		controller = 'Registration'
+		action = 'new'
+	}
+
+A special case is generating URIs for links to Neos modules. In this case often the option `request = ${request.mainRequest}` is needed
+when linking to a controller outside of the context of the current subrequest.
+
+Link to the content module::
+
+	uri = Neos.Fusion:ActionUri {
+		request = ${request.mainRequest}
+		package="Neos.Neos.Ui"
+		controller="Backend"
+		action = 'index'
+		arguments.node = ${documentNode}
+	}
+
+Link to backend modules (other than `content`)::
+
+	uri = Neos.Fusion:ActionUri {
+		request = ${request.mainRequest}
+		action = "index"
+		package = "Neos.Neos"
+		controller = "Backend\\Module"
+		arguments {
+			module = 'administration/sites'
+			moduleArguments {
+				@action = 'edit'
+				site = ${site}
+			}
+		}
+	}
+
 .. _Neos_Fusion__UriBuilder:
 
 Neos.Fusion:UriBuilder
@@ -600,6 +743,8 @@ Built a URI to a controller action
 :addQueryString: (boolean) Whether to keep the query parameters of the current URI
 :argumentsToBeExcludedFromQueryString: (array) Query parameters to exclude for ``addQueryString``
 :absolute: (boolean) Whether to create an absolute URI
+
+.. note:: The use of ``Neos.Fusion:UriBuilder`` is deprecated. Use :ref:`_Neos_Fusion__ActionUri` instead.
 
 Example::
 
@@ -632,12 +777,84 @@ Example::
 		}
 	}
 
+.. _Neos_Fusion__Link_Action:
+
+Neos.Fusion:Link.Action
+-----------------------
+
+Renders a link pointing to a controller/action
+
+:content: (string) content of the link tag
+:href: (string, default :ref:`Neos_Fusion__ActionUri`) The href for the link tag
+:[key]: (string) Other attributes for the link tag
+
+Example::
+
+	link = Neos.Fusion:Link.Action {
+		content = "register"
+		class="action-link"
+		href.package = 'My.Package'
+		href.controller = 'Registration'
+		href.action = 'new'
+	}
+
+	link = afx`
+		<Neos.Fusion:Link.Action class="action-link" href.package="My.Package" href.controller="Registration" href.action="new">
+			register
+		</Neos.Fusion:Link.Action>
+	`
+
+Link to the content-module in afx::
+
+ <Neos.Fusion:Link.Action
+		href.request={request.mainRequest}
+		href.action="index"
+		href.package="Neos.Neos.Ui"
+		href.controller="Backend"
+		href.arguments.node={node}
+	>
+		to content module
+	</Neos.Fusion:Link.Action>
+
+Link to backend-modules other than the content-module::
+
+	<Neos.Fusion:Link.Action
+		href.request={request.mainRequest}
+		href.action="index"
+		href.package="Neos.Neos"
+		href.controller="Backend\\Module"
+		href.arguments.module='administration/sites'
+		href.arguments.moduleArguments.@action='index'
+	>
+		to site module
+	</Neos.Fusion:Link.Action>
+
+.. _Neos_Fusion__Link_Resource:
+
+Neos.Fusion:Link.Resource
+-------------------------
+
+Renders a link pointing to a resource
+
+:content: (string) content of the link tag
+:href: (string,  default :ref:`Neos_Fusion__ResouceUri`) The href for the link tag
+:[key]: (string) Other attributes for the link tag
+
+Example::
+
+	link = afx`
+		<Neos.Fusion:Link.Resource class="resource-link" href.path="resource://Some.Package/Public/Images/SomeImage.png">
+			Some Link
+		</Neos.Fusion:Link.Resource>
+	`
+
 Neos.Fusion:CanRender
 ---------------------
 
 Check whether a Fusion prototype can be rendered. For being renderable a prototype must exist and have an implementation class, or inherit from an existing renderable prototype. The implementation class can be defined indirectly via base prototypes.
 
 :type: (string) The prototype name that is checked
+:path: (string) The fusion path name that is checked
 
 Example::
 
@@ -825,8 +1042,7 @@ Neos.Neos:ContentComponent
 --------------------------
 
 Base type to render component based content-nodes, extends :ref:`Neos_Fusion__Component`.
-
-:renderer: (mixed, **required**) The value which gets rendered
+Features the same API as :ref:`Neos_Fusion__Component`, but it adds content element wrapping, so the node is correctly detected by the Neos.Ui
 
 
 .. _Neos_Neos__Editable:
@@ -1066,6 +1282,7 @@ Create a list of menu-items items for nodes.
 :filter: (string) Filter items by node type (e.g. ``'!My.Site:News,Neos.Neos:Document'``), defaults to ``'Neos.Neos:Document'``
 :renderHiddenInIndex: (boolean) Whether nodes with ``hiddenInIndex`` should be rendered, defaults to ``false``
 :itemCollection: (array) Explicitly set the Node items for the menu (alternative to ``startingPoints`` and levels)
+:itemUriRenderer: (:ref:`Neos_Neos__NodeUri`) prototype to use for rendering the URI of each item
 
 MenuItems item properties:
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1074,7 +1291,8 @@ MenuItems item properties:
 :originalNode: (Node) Original node for the item
 :state: (string) Menu state of the item: ``'normal'``, ``'current'`` (the current node) or ``'active'`` (ancestor of current node)
 :label: (string) Full label of the node
-:menuLevel: (integer) Men^u level the item is rendered on
+:menuLevel: (integer) Menu level the item is rendered on
+:uri: (string) Frontend URI of the node
 
 Examples:
 ^^^^^^^^^
@@ -1104,6 +1322,17 @@ Menu with custom starting point:
 		entryLevel = 2
 		maximumLevels = 1
 		startingPoint = ${q(site).children('[uriPathSegment="metamenu"]').get(0)}
+	}
+
+Menu with absolute uris:
+""""""""""""""""""""""""
+
+::
+
+	menuItems = Neos.Neos:MenuItems {
+		itemUriRenderer {
+			absolute = true
+		}
 	}
 
 .. _Neos_Neos__BreadcrumbMenuItems:
@@ -1278,6 +1507,9 @@ Render an image tag for an asset.
 :\*: All :ref:`Neos_Neos__ImageUri` properties
 :attributes: (:ref:`Neos_Fusion__Attributes`) Image tag attributes
 
+Per default, the attribute loading is set to ``'lazy'``. To fetch a resource immediately, you can set ``attributes.loading``
+to ``null``, ``false`` or ``'eager'``.
+
 Example::
 
 	logoImage = Neos.Neos:ImageTag {
@@ -1301,6 +1533,7 @@ overriding the target attribute for external links and resource links.
 :forceConversion: (boolean) Whether to convert URIs in a non-live workspace, defaults to ``FALSE``
 :absolute: (boolean) Can be used to convert node URIs to absolute links, defaults to ``FALSE``
 :setNoOpener: (boolean) Sets the rel="noopener" attribute to external links, which is good practice, defaults to ``TRUE``
+:setExternal: (boolean) Sets the rel="external" attribute to external links. Defaults to ``TRUE``
 
 Example::
 

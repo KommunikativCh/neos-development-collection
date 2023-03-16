@@ -663,13 +663,13 @@
       <!-- Error handlers -->
       <trans-unit id="error.exception.welcomeToNeos" xml:space="preserve">
 				<source>Welcome to Neos</source>
-			<target state="needs-translation">Welcome to Neos</target></trans-unit>
+			<target state="translated">Bienvenue sur Neos</target></trans-unit>
       <trans-unit id="error.exception.goToSetup" xml:space="preserve" approved="yes">
 				<source>Go to setup</source>
 			<target state="final">Allez dans l'assistant de configuration</target></trans-unit>
       <trans-unit id="error.exception.technicalInformation" xml:space="preserve">
 				<source>Technical Information</source>
-			<target state="needs-translation">Technical Information</target></trans-unit>
+			<target state="translated">Informations techniques</target></trans-unit>
       <trans-unit id="error.exception.noHomepageException.title" xml:space="preserve" approved="yes">
 				<source>Missing Homepage</source>
 			<target state="final">Page d'accueil manquante</target></trans-unit>
@@ -815,6 +815,18 @@
       <trans-unit id="searchBoxLeftToType" xml:space="preserve">
 				<source>Please enter ###CHARACTERS### more character</source>
 			<target state="translated">S’il vous plaît entrez ###CHARACTERS### plus de caractère</target></trans-unit>
+      <trans-unit id="login.wrongCredentials.title" xml:space="preserve">
+				<source>Wrong Credentials</source>
+			<target state="needs-translation">Wrong Credentials</target></trans-unit>
+      <trans-unit id="login.wrongCredentials.body" xml:space="preserve" approved="yes">
+				<source>The entered username or password was wrong</source>
+			<target state="final">Le nom d'utilisateur ou mot de passe entré est inconnu</target></trans-unit>
+      <trans-unit id="login.loggedOut.title" xml:space="preserve">
+				<source>Logged Out</source>
+			<target state="needs-translation">Logged Out</target></trans-unit>
+      <trans-unit id="login.loggedOut.body" xml:space="preserve">
+				<source>Successfully logged out</source>
+			<target state="needs-translation">Successfully logged out</target></trans-unit>
     </body>
   </file>
 </xliff>

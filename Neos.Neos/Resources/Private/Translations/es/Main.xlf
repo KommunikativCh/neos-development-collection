@@ -373,10 +373,10 @@
 			<target state="translated">(no se ha seleccionado ningún destino)</target></trans-unit>
       <trans-unit id="shortcut.clickToContinueToFirstChildNode" xml:space="preserve">
 				<source>This is a shortcut to the first child page.&lt;br /&gt;Click {0} to continue to the page.</source>
-			<target state="translated">Este es un acceso directo a la primera página hija. &lt; br / &gt; Haga clic en {0} para continuar a la página.</target></trans-unit>
+			<target state="translated">Este es un acceso directo a la primera página hija. &lt;br /&gt; Haga clic en {0} para continuar a la página.</target></trans-unit>
       <trans-unit id="shortcut.clickToContinueToParentNode" xml:space="preserve">
 				<source>This is a shortcut to the parent page.&lt;br /&gt;Click {0} to continue to the page.</source>
-			<target state="translated">Este es un acceso directo a la página padre. &lt; br / &gt; Haga clic en {0} para continuar a la página.</target></trans-unit>
+			<target state="translated">Este es un acceso directo a la página padre. &lt;br /&gt; Haga clic en {0} para continuar a la página.</target></trans-unit>
       <!-- javascript -->
       <trans-unit id="content.components.contentContextBar.fullScreenButton.title" xml:space="preserve">
 				<source>Full Screen</source>
@@ -399,7 +399,7 @@
 			<target state="translated">¿Está seguro de que desea descartar todos los cambios en este espacio de trabajo?</target></trans-unit>
       <trans-unit id="content.components.discardAllDialog.discardXChangesSubheader" xml:space="preserve">
 				<source>Are you sure that you want to discard {numberOfChanges} change(s) in this workspace?</source>
-			<target state="translated">¿Estás segirp qie deseas descartar {numberOfChanges} cambios en este espacio de trabajo?</target></trans-unit>
+			<target state="translated">¿Estás seguro que deseas descartar {numberOfChanges} cambios en este espacio de trabajo?</target></trans-unit>
       <trans-unit id="publishAll" xml:space="preserve">
 				<source>Publish all</source>
 			<target state="translated">Publicar todo</target></trans-unit>
@@ -684,10 +684,10 @@
 			<target state="translated">Error de base de datos</target></trans-unit>
       <trans-unit id="error.exception.databaseConnectionExceptions.description" xml:space="preserve">
 				<source>There is no database connection yet or the Neos database schema has not been created.</source>
-			<target state="needs-translation">There is no database connection yet or the Neos database schema has not been created.</target></trans-unit>
+			<target state="translated">Todavía no hay conexión a la base de datos o el esquema de base de datos de Neos no ha sido creado.</target></trans-unit>
       <trans-unit id="error.exception.databaseConnectionExceptions.setupMessage" xml:space="preserve">
 				<source>Run the setup to configure your database.</source>
-			<target state="needs-translation">Run the setup to configure your database.</target></trans-unit>
+			<target state="translated">Ejecute la configuración para configurar la base de datos.</target></trans-unit>
       <trans-unit id="error.exception.notFoundExceptions.title" xml:space="preserve">
 				<source>Page Not Found</source>
 			<target state="translated">Página no encontrada</target></trans-unit>
@@ -815,6 +815,18 @@
       <trans-unit id="searchBoxLeftToType" xml:space="preserve" approved="yes">
 				<source>Please enter ###CHARACTERS### more character</source>
 			<target state="final">Por favor introduzca ###CHARACTERS### caràcteres más</target></trans-unit>
+      <trans-unit id="login.wrongCredentials.title" xml:space="preserve">
+				<source>Wrong Credentials</source>
+			<target state="needs-translation">Wrong Credentials</target></trans-unit>
+      <trans-unit id="login.wrongCredentials.body" xml:space="preserve">
+				<source>The entered username or password was wrong</source>
+			<target state="translated">El nombre de usuario o la contraseña introducido estaba mal</target></trans-unit>
+      <trans-unit id="login.loggedOut.title" xml:space="preserve">
+				<source>Logged Out</source>
+			<target state="needs-translation">Logged Out</target></trans-unit>
+      <trans-unit id="login.loggedOut.body" xml:space="preserve">
+				<source>Successfully logged out</source>
+			<target state="needs-translation">Successfully logged out</target></trans-unit>
     </body>
   </file>
 </xliff>

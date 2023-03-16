@@ -3,7 +3,34 @@
 Eel Helpers Reference
 =====================
 
-This reference was automatically generated from code on 2019-03-05
+This reference was automatically generated from code on 2023-03-09
+
+
+.. _`Eel Helpers Reference: Api`:
+
+Api
+---
+
+
+
+Implemented in: ``Neos\Neos\Ui\Fusion\Helper\ApiHelper``
+
+Api.emptyArrayToObject(array)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Converts an empty array to an empty object. Does nothing if array is not empty.
+
+Use this helper to prevent associative arrays from being converted to non-associative arrays by json_encode.
+This is an internal helper and might change without further notice
+FIXME: Probably better to produce objects in the first place "upstream".
+
+* ``array`` (array) Associative array which may be empty
+
+**Return** (array|\stdClass) Non-empty associative array or empty object
+
+
+
+
 
 
 .. _`Eel Helpers Reference: Array`:
@@ -25,9 +52,9 @@ Array.concat(array1, array2, array\_)
 
 Concatenate arrays or values to a new array
 
-* ``array1`` (array|mixed) First array or value
-* ``array2`` (array|mixed) Second array or value
-* ``array_`` (array|mixed, *optional*) Optional variable list of additional arrays / values
+* ``array1`` (iterable|mixed) First array or value
+* ``array2`` (iterable|mixed) Second array or value
+* ``array_`` (iterable|mixed, *optional*) Optional variable list of additional arrays / values
 
 **Return** (array) The array with concatenated arrays or values
 
@@ -42,7 +69,7 @@ Example::
     Array.every([1, 2, 3, 4], x => x % 2 == 0) // == false
     Array.every([2, 4, 6, 8], x => x % 2) // == true
 
-* ``array`` (array) Array of elements to test
+* ``array`` (iterable) Array of elements to test
 * ``callback`` (callable) Callback for testing elements, current value and key will be passed as arguments
 
 **Return** (bool) True if all elements passed the test
@@ -57,7 +84,7 @@ Examples:
     Array.filter([1, 2, 3, 4], x => x % 2 == 0) // == [2, 4]
     Array.filter(['foo', 'bar', 'baz'], (x, index) => index < 2) // == ['foo', 'bar']
 
-* ``array`` (array) Array of elements to filter
+* ``array`` (iterable) Array of elements to filter
 * ``callback`` (callable, *optional*) Callback for testing if an element should be included in the result, current value and key will be passed as arguments
 
 **Return** (array) The array with elements where callback returned true
@@ -67,7 +94,7 @@ Array.first(array)
 
 Get the first element of an array
 
-* ``array`` (array) The array
+* ``array`` (iterable) The array
 
 **Return** (mixed)
 
@@ -79,7 +106,7 @@ Exchanges all keys with their associated values in an array
 Note that the values of array need to be valid keys, i.e. they need to be either int or string.
 If a value has several occurrences, the latest key will be used as its value, and all others will be lost.
 
-* ``array`` (array)
+* ``array`` (iterable)
 
 **Return** (array) The array with flipped keys and values
 
@@ -89,7 +116,7 @@ Array.indexOf(array, searchElement, fromIndex)
 Returns the first index at which a given element can be found in the array,
 or -1 if it is not present
 
-* ``array`` (array) The array
+* ``array`` (iterable) The array
 * ``searchElement`` (mixed) The element value to find
 * ``fromIndex`` (int, *optional*) Position in the array to start the search.
 
@@ -100,7 +127,7 @@ Array.isEmpty(array)
 
 Check if an array is empty
 
-* ``array`` (array) The array
+* ``array`` (iterable) The array
 
 **Return** (bool) true if the array is empty
 
@@ -109,7 +136,7 @@ Array.join(array, separator)
 
 Join values of an array with a separator
 
-* ``array`` (array) Array with values to join
+* ``array`` (iterable) Array with values to join
 * ``separator`` (string, *optional*) A separator for the values
 
 **Return** (string) A string with the joined values separated by the separator
@@ -119,16 +146,25 @@ Array.keys(array)
 
 Get the array keys
 
-* ``array`` (array) The array
+* ``array`` (iterable) The array
 
 **Return** (array)
+
+Array.ksort(array)
+^^^^^^^^^^^^^^^^^^
+
+Sort an array by key
+
+* ``array`` (iterable) The array to sort
+
+**Return** (array) The sorted array
 
 Array.last(array)
 ^^^^^^^^^^^^^^^^^
 
 Get the last element of an array
 
-* ``array`` (array) The array
+* ``array`` (iterable) The array
 
 **Return** (mixed)
 
@@ -137,7 +173,7 @@ Array.length(array)
 
 Get the length of an array
 
-* ``array`` (array) The array
+* ``array`` (iterable) The array
 
 **Return** (int)
 
@@ -151,7 +187,7 @@ Examples::
     Array.map([1, 2, 3, 4], x => x * x)
     Array.map([1, 2, 3, 4], (x, index) => x * index)
 
-* ``array`` (array) Array of elements to map
+* ``array`` (iterable) Array of elements to map
 * ``callback`` (callable) Callback to apply for each element, current value and key will be passed as arguments
 
 **Return** (array) The array with callback applied, keys will be preserved
@@ -165,7 +201,7 @@ Note: This differs from the JavaScript behavior of Array.pop which will return t
 
 An empty array will result in an empty array again.
 
-* ``array`` (array)
+* ``array`` (iterable)
 
 **Return** (array) The array without the last element
 
@@ -178,7 +214,7 @@ Allows to push multiple elements at once::
 
     Array.push(array, e1, e2)
 
-* ``array`` (array)
+* ``array`` (iterable|scalar|null)
 * ``element`` (mixed)
 
 **Return** (array) The array with the inserted elements
@@ -216,7 +252,7 @@ Examples::
     Array.reduce([1, 2, 3, 4], (accumulator, currentValue) => accumulator + currentValue) // == 10
     Array.reduce([1, 2, 3, 4], (accumulator, currentValue) => accumulator + currentValue, 1) // == 11
 
-* ``array`` (array) Array of elements to reduce to a value
+* ``array`` (iterable) Array of elements to reduce to a value
 * ``callback`` (callable) Callback for accumulating values, accumulator, current value and key will be passed as arguments
 * ``initialValue`` (mixed, *optional*) Initial value, defaults to first item in array and callback starts with second entry
 
@@ -227,7 +263,7 @@ Array.reverse(array)
 
 Returns an array in reverse order
 
-* ``array`` (array) The array
+* ``array`` (iterable) The array
 
 **Return** (array)
 
@@ -236,7 +272,7 @@ Array.set(array, key, value)
 
 Set the specified key in the the array
 
-* ``array`` (array)
+* ``array`` (iterable)
 * ``key`` (string|integer) the key that should be set
 * ``value`` (mixed) the value to assign to the key
 
@@ -251,7 +287,7 @@ Note: This differs from the JavaScript behavior of Array.shift which will return
 
 An empty array will result in an empty array again.
 
-* ``array`` (array)
+* ``array`` (iterable)
 
 **Return** (array) The array without the first element
 
@@ -263,7 +299,7 @@ Shuffle an array
 Randomizes entries an array with the option to preserve the existing keys.
 When this option is set to false, all keys will be replaced
 
-* ``array`` (array)
+* ``array`` (iterable)
 * ``preserveKeys`` (bool, *optional*) Wether to preserve the keys when shuffling the array
 
 **Return** (array) The shuffled array
@@ -273,7 +309,7 @@ Array.slice(array, begin, end)
 
 Extract a portion of an indexed array
 
-* ``array`` (array) The array (with numeric indices)
+* ``array`` (iterable) The array (with numeric indices)
 * ``begin`` (int)
 * ``end`` (int, *optional*)
 
@@ -290,7 +326,7 @@ Example::
     Array.some([1, 2, 3, 4], x => x % 2 == 0) // == true
     Array.some([1, 2, 3, 4], x => x > 4) // == false
 
-* ``array`` (array) Array of elements to test
+* ``array`` (iterable) Array of elements to test
 * ``callback`` (callable) Callback for testing elements, current value and key will be passed as arguments
 
 **Return** (bool) True if at least one element passed the test
@@ -305,7 +341,7 @@ The sorting is done first by numbers, then by characters.
 Internally natsort() is used as it most closely resembles javascript's sort().
 Because there are no real associative arrays in Javascript, keys of the array will be preserved.
 
-* ``array`` (array)
+* ``array`` (iterable)
 
 **Return** (array) The sorted array
 
@@ -318,12 +354,21 @@ Allows to give multiple replacements at once::
 
     Array.splice(array, 3, 2, 'a', 'b')
 
-* ``array`` (array)
+* ``array`` (iterable)
 * ``offset`` (int) Index of the first element to remove
 * ``length`` (int, *optional*) Number of elements to remove
 * ``replacements`` (mixed, *optional*) Elements to insert instead of the removed range
 
 **Return** (array) The array with removed and replaced elements
+
+Array.unique(array)
+^^^^^^^^^^^^^^^^^^^
+
+Removes duplicate values from an array
+
+* ``array`` (iterable) The input array
+
+**Return** (array) The filtered array.
 
 Array.unshift(array, element)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -334,10 +379,42 @@ Allows to insert multiple elements at once::
 
     Array.unshift(array, e1, e2)
 
-* ``array`` (array)
+* ``array`` (iterable)
 * ``element`` (mixed)
 
 **Return** (array) The array with the inserted elements
+
+Array.values(array)
+^^^^^^^^^^^^^^^^^^^
+
+Get the array values
+
+* ``array`` (iterable) The array
+
+**Return** (array)
+
+
+
+
+
+
+.. _`Eel Helpers Reference: BaseUri`:
+
+BaseUri
+-------
+
+This is a purely internal helper to provide baseUris for Caching.
+It will be moved to a more sensible package in the future so do
+not rely on the classname for now.
+
+Implemented in: ``Neos\Fusion\Eel\BaseUriHelper``
+
+BaseUri.getConfiguredBaseUriOrFallbackToCurrentRequest(fallbackRequest)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* ``fallbackRequest`` (ServerRequestInterface|null, *optional*)
+
+**Return** (UriInterface)
 
 
 
@@ -469,7 +546,7 @@ Date.formatCldr(date, cldrFormat, locale)
 Format a date to a string with a given cldr format
 
 * ``date`` (integer|string|\DateTime)
-* ``cldrFormat`` (string) Format string in CLDR format (see http://cldr.unicode.org/translation/date-time-1/date-time)
+* ``cldrFormat`` (string) Format string in CLDR format (see http://cldr.unicode.org/translation/date-time)
 * ``locale`` (null|string, *optional*) String locale - example (de|en|ru_RU)
 
 **Return** (string)
@@ -571,6 +648,15 @@ Helper to read files.
 
 Implemented in: ``Neos\Eel\Helper\FileHelper``
 
+File.exists(filepath)
+^^^^^^^^^^^^^^^^^^^^^
+
+Check if the given file path exists
+
+* ``filepath`` (string)
+
+**Return** (bool)
+
 File.fileInfo(filepath)
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -604,6 +690,91 @@ Get file information like creation and modification times as well as size.
 * ``filepath`` (string)
 
 **Return** (array) with keys mode, uid, gid, size, atime, mtime, ctime, (blksize, blocks, dev, ino, nlink, rdev)
+
+
+
+
+
+
+.. _`Eel Helpers Reference: Form.Schema`:
+
+Form.Schema
+-----------
+
+
+
+Implemented in: ``Neos\Fusion\Form\Runtime\Helper\SchemaHelper``
+
+Form.Schema.array()
+^^^^^^^^^^^^^^^^^^^
+
+Create an array schema.
+
+**Return** (SchemaInterface)
+
+Form.Schema.arrayOf(schema)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Create a date schema for an array by providing a schema for all items
+
+* ``schema`` (SchemaInterface) The schema for the items of the array
+
+**Return** (SchemaInterface)
+
+Form.Schema.boolean()
+^^^^^^^^^^^^^^^^^^^^^
+
+Create a boolean schema
+
+**Return** (SchemaInterface)
+
+Form.Schema.date(format)
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Create a date schema. The php value will be DateTime
+
+* ``format`` (string, *optional*) The format default is "Y-m-d
+
+**Return** (SchemaInterface)
+
+Form.Schema.float()
+^^^^^^^^^^^^^^^^^^^
+
+Create a float schema
+
+**Return** (SchemaInterface)
+
+Form.Schema.forType(type)
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Create a schema for the given type
+
+* ``type`` (string) The type or className that is expected
+
+**Return** (SchemaInterface)
+
+Form.Schema.integer()
+^^^^^^^^^^^^^^^^^^^^^
+
+Create a integer schema
+
+**Return** (SchemaInterface)
+
+Form.Schema.resource(collection)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Create a resource schema
+
+* ``collection`` (string, *optional*) The collection new resources are put into
+
+**Return** (SchemaInterface)
+
+Form.Schema.string()
+^^^^^^^^^^^^^^^^^^^^
+
+Create a string schema
+
+**Return** (SchemaInterface)
 
 
 
@@ -936,7 +1107,7 @@ Rounds the subject to the given precision
 The precision defines the number of digits after the decimal point.
 Negative values are also supported (-1 rounds to full 10ths).
 
-* ``subject`` (float) The value to round
+* ``subject`` (mixed) The value to round
 * ``precision`` (integer, *optional*) The precision (digits after decimal point) to use, defaults to 0
 
 **Return** (float) The rounded value
@@ -995,7 +1166,7 @@ on the sign of the number.
 
 * ``x`` (float) A number
 
-**Return** (integer) The integral part of the given number
+**Return** (int|float) The integral part of the given number or NAN if the given value was not numeric
 
 
 
@@ -1042,6 +1213,30 @@ The input is assumed to be an array or Collection of objects. Groups this input 
 * ``groupingKey`` (string)
 
 **Return** (array)
+
+
+
+
+
+
+.. _`Eel Helpers Reference: Neos.Backend`:
+
+Neos.Backend
+------------
+
+BackendUser helper for translations in the backend
+
+Implemented in: ``Neos\Neos\Fusion\Helper\BackendHelper``
+
+Neos.Backend.interfaceLanguage()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The interface language the user selected or the default language defined in the settings
+Formatted as {@see \Neos\Flow\I18n\Locale} identifier, eg "de", "en", ...
+
+Example::
+
+    Translation.id("mh").locale(Neos.Backend.interfaceLanguage()).translate()
 
 
 
@@ -1128,7 +1323,7 @@ Implemented in: ``Neos\Neos\Fusion\Helper\LinkHelper``
 Neos.Link.convertUriToObject(uri, contextNode)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* ``uri`` (string|Uri)
+* ``uri`` (string|UriInterface)
 * ``contextNode`` (NodeInterface, *optional*)
 
 **Return** (NodeInterface|AssetInterface|NULL)
@@ -1136,28 +1331,28 @@ Neos.Link.convertUriToObject(uri, contextNode)
 Neos.Link.getScheme(uri)
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-* ``uri`` (string|Uri)
+* ``uri`` (string|UriInterface)
 
 **Return** (string)
 
 Neos.Link.hasSupportedScheme(uri)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* ``uri`` (string|Uri)
+* ``uri`` (string|UriInterface)
 
 **Return** (boolean)
 
 Neos.Link.resolveAssetUri(uri)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* ``uri`` (string|Uri)
+* ``uri`` (string|UriInterface)
 
 **Return** (string)
 
 Neos.Link.resolveNodeUri(uri, contextNode, controllerContext)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* ``uri`` (string|Uri)
+* ``uri`` (string|UriInterface)
 * ``contextNode`` (NodeInterface)
 * ``controllerContext`` (ControllerContext)
 
@@ -1187,6 +1382,15 @@ has the given name.
 * ``nodeType`` (string)
 
 **Return** (bool)
+
+Neos.Node.labelForNode(node)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Generate a label for a node with a chaining mechanism. To be used in nodetype definitions.
+
+* ``node`` (NodeInterface|null, *optional*)
+
+**Return** (NodeLabelToken)
 
 Neos.Node.nearestContentCollection(node, nodePath)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1245,41 +1449,31 @@ Render a human-readable description for the passed $dimensions
 
 
 
-.. _`Eel Helpers Reference: Neos.Ui.Modules`:
+.. _`Eel Helpers Reference: Neos.Seo.Image`:
 
-Neos.Ui.Modules
----------------
+Neos.Seo.Image
+--------------
 
 
 
-Implemented in: ``Neos\Neos\Ui\Fusion\Helper\ModulesHelper``
+Implemented in: ``Neos\Seo\Fusion\Helper\ImageHelper``
 
-Neos.Ui.Modules.isAllowed(modulePath)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Neos.Seo.Image.createThumbnail(asset, preset, width, maximumWidth, height, maximumHeight, allowCropping, allowUpScaling, async, quality, format)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Checks whether the current user has access to a module
+* ``asset`` (AssetInterface)
+* ``preset`` (string, *optional*) Name of the preset that should be used as basis for the configuration
+* ``width`` (integer, *optional*) Desired width of the image
+* ``maximumWidth`` (integer, *optional*) Desired maximum width of the image
+* ``height`` (integer, *optional*) Desired height of the image
+* ``maximumHeight`` (integer, *optional*) Desired maximum height of the image
+* ``allowCropping`` (boolean, *optional*) Whether the image should be cropped if the given sizes would hurt the aspect ratio
+* ``allowUpScaling`` (boolean, *optional*) Whether the resulting image size might exceed the size of the original image
+* ``async`` (boolean, *optional*) Whether the thumbnail can be generated asynchronously
+* ``quality`` (integer, *optional*) Quality of the processed image
+* ``format`` (string, *optional*) Format for the image, only jpg, jpeg, gif, png, wbmp, xbm, webp and bmp are supported.
 
-* ``modulePath`` (string)
-
-**Return** (boolean)
-
-Neos.Ui.Modules.isAvailable(moduleName)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Checks, whether a module is available to the current user
-
-* ``moduleName`` (string)
-
-**Return** (boolean)
-
-Neos.Ui.Modules.isEnabled(modulePath)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Checks whether a module is enabled
-
-* ``modulePath`` (string)
-
-**Return** (boolean)
+**Return** (null|ImageInterface)
 
 
 
@@ -1302,23 +1496,6 @@ Neos.Ui.PositionalArraySorter.sort(array, positionPath)
 * ``positionPath`` (string, *optional*)
 
 **Return** (array)
-
-
-
-
-
-
-.. _`Eel Helpers Reference: Neos.Ui.Sites`:
-
-Neos.Ui.Sites
--------------
-
-
-
-Implemented in: ``Neos\Neos\Ui\Fusion\Helper\SitesHelper``
-
-Neos.Ui.Sites.isActive(siteNode)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
 
@@ -1381,8 +1558,10 @@ Implemented in: ``Neos\Neos\Ui\Fusion\Helper\NodeInfoHelper``
 NodeInfo.createRedirectToNode(controllerContext, node)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Creates a URL that will redirect to the given $node in live or base workspace, or returns an empty string if that doesn't exist or is inaccessible
+
 * ``controllerContext`` (ControllerContext)
-* ``node`` (NodeInterface, *optional*)
+* ``node`` (NodeInterface|null, *optional*)
 
 **Return** (string)
 
@@ -1506,6 +1685,42 @@ Returns true, if any account is currently authenticated
 
 
 
+.. _`Eel Helpers Reference: StaticResource`:
+
+StaticResource
+--------------
+
+
+
+Implemented in: ``Neos\Flow\ResourceManagement\EelHelper\StaticResourceHelper``
+
+StaticResource.content(packageKey, pathAndFilename, localize)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Get the content of a package resource
+
+* ``packageKey`` (string) Package key where the resource is from.
+* ``pathAndFilename`` (string) The path and filename of the resource. Starting with "Public/..." or "Private/...
+* ``localize`` (bool, *optional*) If enabled localizing of the resource is attempted by adding locales from the current locale-chain between filename and extension.
+
+**Return** (string)
+
+StaticResource.uri(packageKey, pathAndFilename, localize)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Get the public uri of a package resource
+
+* ``packageKey`` (string) Package key where the resource is from.
+* ``pathAndFilename`` (string) The path and filename of the resource. Has to start with "Public/..." as private resources do not have a uri.
+* ``localize`` (bool, *optional*) If enabled localizing of the resource is attempted by adding locales from the current locale-chain between filename and extension.
+
+**Return** (string)
+
+
+
+
+
+
 .. _`Eel Helpers Reference: String`:
 
 String
@@ -1609,7 +1824,7 @@ Example::
 
 * ``string`` (string) The string
 * ``search`` (string) A string to search
-* ``position`` (integer, *optional*) Optional position for limiting the string
+* ``position`` (int|null, *optional*) Optional position for limiting the string
 
 **Return** (boolean) true if the string ends with the given search
 
@@ -1785,19 +2000,21 @@ Example::
 
 **Return** (array) The matches as array or NULL if not matched
 
-String.pregReplace(string, pattern, replace)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+String.pregReplace(string, pattern, replace, limit)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Replace occurrences of a search string inside the string using regular expression matching (PREG style)
 
 Examples::
 
     String.pregReplace("Some.String with sp:cial characters", "/[[:^alnum:]]/", "-") == "Some-String-with-sp-cial-characters"
+    String.pregReplace("Some.String with sp:cial characters", "/[[:^alnum:]]/", "-", 1) == "Some-String with sp:cial characters"
     String.pregReplace("2016-08-31", "/([0-9]+)-([0-9]+)-([0-9]+)/", "$3.$2.$1") == "31.08.2016"
 
 * ``string`` (string) The input string
 * ``pattern`` (string) A PREG pattern
 * ``replace`` (string) A replacement string, can contain references to capture groups with "\\n" or "$n
+* ``limit`` (integer, *optional*) The maximum possible replacements for each pattern in each subject string. Defaults to -1 (no limit).
 
 **Return** (string) The string with all occurrences replaced
 
@@ -1878,8 +2095,8 @@ Example::
 Node: This implementation follows JavaScript semantics without support of regular expressions.
 
 * ``string`` (string) The string to split
-* ``separator`` (string, *optional*) The separator where the string should be splitted
-* ``limit`` (integer, *optional*) The maximum amount of items to split (exceeding items will be discarded)
+* ``separator`` (string|null, *optional*) The separator where the string should be splitted
+* ``limit`` (int|null, *optional*) The maximum amount of items to split (exceeding items will be discarded)
 
 **Return** (array) An array of the splitted parts, excluding the separators
 
@@ -1912,7 +2129,7 @@ Example::
 This is a wrapper for the strip_tags() PHP function.
 
 * ``string`` (string) The string to strip
-* ``allowableTags`` (string, *optional*) Specify tags which should not be stripped
+* ``allowableTags`` (string|null, *optional*) Specify tags which should not be stripped
 
 **Return** (string) The string with tags stripped
 
@@ -1958,7 +2175,7 @@ String.toBoolean(string)
 
 Convert a string to boolean
 
-A value is ``true``, if it is either the string ``"true"`` or ``"true"`` or the number ``1``.
+A value is ``true``, if it is either the string ``"true"`` or ``"TRUE"`` or the number ``1``.
 
 * ``string`` (string) The string to convert
 
@@ -2074,7 +2291,7 @@ translated label.
 * ``quantity`` (mixed, *optional*) A number to find plural form for (float or int), NULL to not use plural forms
 * ``locale`` (string, *optional*) An identifier of locale to use (NULL for use the default locale)
 
-**Return** (string) Translated label or source label / ID key
+**Return** (string|null) Translated label or source label / ID key
 
 Translation.value(value)
 ^^^^^^^^^^^^^^^^^^^^^^^^

@@ -138,25 +138,22 @@ class ThumbnailService
         $async = $configuration->isAsync();
         if ($thumbnail === null) {
             $thumbnail = new Thumbnail($asset, $configuration);
-            $this->emitThumbnailCreated($thumbnail);
 
             // If the thumbnail strategy failed to generate a valid thumbnail
             if ($async === false && $thumbnail->getResource() === null && $thumbnail->getStaticResource() === null) {
+                // the thumbnail should not be persisted at this point, but remove is a no-op if the thumbnail
+                // does not exist - and if it does, this keeps it out of the way…
                 $this->thumbnailRepository->remove($thumbnail);
                 return null;
             }
 
             if (!$this->persistenceManager->isNewObject($asset)) {
-                $this->thumbnailRepository->add($thumbnail);
+                $thumbnail = $this->thumbnailRepository->persistThumbnailDirectly($thumbnail, $configuration);
             }
             $asset->addThumbnail($thumbnail);
-
-            // Allow thumbnails to be persisted even if this is a "safe" HTTP request:
-            $this->persistenceManager->whitelistObject($thumbnail);
             $this->thumbnailCache[$assetIdentifier][$configurationHash] = $thumbnail;
 
-            $this->persistenceManager->whitelistObject($thumbnail);
-            $this->thumbnailCache[$assetIdentifier][$configurationHash] = $thumbnail;
+            $this->emitThumbnailCreated($thumbnail);
         } elseif ($async === false && $thumbnail->getResource() === null) {
             $this->refreshThumbnail($thumbnail);
         }
@@ -234,7 +231,8 @@ class ThumbnailService
     public function refreshThumbnail(Thumbnail $thumbnail): void
     {
         $thumbnail->refresh();
-        $this->persistenceManager->whitelistObject($thumbnail);
+        $this->emitThumbnailRefreshed($thumbnail);
+        $this->persistenceManager->allowObject($thumbnail);
         if (!$this->persistenceManager->isNewObject($thumbnail)) {
             $this->thumbnailRepository->update($thumbnail);
         }
@@ -261,6 +259,17 @@ class ThumbnailService
         }
 
         return $this->resourceManager->getPublicPackageResourceUriByPath($staticResource);
+    }
+
+    /**
+     * Signals that a thumbnail was refreshed.
+     *
+     * @Flow\Signal
+     * @param Thumbnail $thumbnail
+     * @return void
+     */
+    public function emitThumbnailRefreshed(Thumbnail $thumbnail): void
+    {
     }
 
     /**

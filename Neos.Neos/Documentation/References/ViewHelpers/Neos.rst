@@ -1,9 +1,9 @@
 .. _`Neos ViewHelper Reference`:
 
 Neos ViewHelper Reference
-=========================
+#########################
 
-This reference was automatically generated from code on 2020-05-18
+This reference was automatically generated from code on 2023-03-09
 
 
 .. _`Neos ViewHelper Reference: neos:backend.authenticationProviderLabel`:
@@ -105,27 +105,6 @@ Arguments
 
 
 
-.. _`Neos ViewHelper Reference: neos:backend.container`:
-
-neos:backend.container
-----------------------
-
-ViewHelper for the backend 'container'. Renders the required HTML to integrate
-the Neos backend into a website.
-
-:Implementation: Neos\\Neos\\ViewHelpers\\Backend\\ContainerViewHelper
-
-
-
-
-Arguments
-*********
-
-* ``node`` (Neos\ContentRepository\Domain\Model\NodeInterface): Node
-
-
-
-
 .. _`Neos ViewHelper Reference: neos:backend.cssBuiltVersion`:
 
 neos:backend.cssBuiltVersion
@@ -202,6 +181,26 @@ ViewHelper for rendering the current backend users interface language.
 
 
 
+.. _`Neos ViewHelper Reference: neos:backend.isAllowedToEditUser`:
+
+neos:backend.isAllowedToEditUser
+--------------------------------
+
+Returns true, if the current user is allowed to edit the given user, false otherwise.
+
+:Implementation: Neos\\Neos\\ViewHelpers\\Backend\\IsAllowedToEditUserViewHelper
+
+
+
+
+Arguments
+*********
+
+* ``user`` (Neos\Neos\Domain\Model\User): The user subject
+
+
+
+
 .. _`Neos ViewHelper Reference: neos:backend.javascriptConfiguration`:
 
 neos:backend.javascriptConfiguration
@@ -211,19 +210,6 @@ ViewHelper for the backend JavaScript configuration. Renders the required JS sni
 the Neos backend.
 
 :Implementation: Neos\\Neos\\ViewHelpers\\Backend\\JavascriptConfigurationViewHelper
-
-
-
-
-
-.. _`Neos ViewHelper Reference: neos:backend.shouldLoadMinifiedJavascript`:
-
-neos:backend.shouldLoadMinifiedJavascript
------------------------------------------
-
-Returns true if the minified Neos JavaScript sources should be loaded, false otherwise.
-
-:Implementation: Neos\\Neos\\ViewHelpers\\Backend\\ShouldLoadMinifiedJavascriptViewHelper
 
 
 
@@ -656,7 +642,7 @@ Arguments
 
 * ``nodeVariableName`` (string, *optional*): The variable the node will be assigned to for the rendered child content
 
-* ``resolveShortcuts`` (boolean, *optional*): INTERNAL Parameter - if false, shortcuts are not redirected to their target. Only needed on rare backend occasions when we want to link to the shortcut itself
+* ``resolveShortcuts`` (boolean, *optional*): DEPRECATED Parameter - ignored
 
 
 
@@ -1115,7 +1101,7 @@ Arguments
 
 * ``baseNodeName`` (string, *optional*): The name of the base node inside the Fusion context to use for the ContentContext or resolving relative paths
 
-* ``resolveShortcuts`` (boolean, *optional*): INTERNAL Parameter - if false, shortcuts are not redirected to their target. Only needed on rare backend occasions when we want to link to the shortcut itself.
+* ``resolveShortcuts`` (boolean, *optional*): DEPRECATED Parameter - ignored
 
 
 
@@ -1176,6 +1162,7 @@ Expected result::
 
 	about/us.html
 	(depending on current workspace, current node, format etc.)
+
 
 
 

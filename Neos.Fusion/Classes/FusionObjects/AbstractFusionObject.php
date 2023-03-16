@@ -40,7 +40,7 @@ abstract class AbstractFusionObject implements \ArrayAccess
     /**
      * @var array
      */
-    protected $tsValueCache = [];
+    protected $fusionValueCache = [];
 
     /**
      * Constructor
@@ -76,7 +76,7 @@ abstract class AbstractFusionObject implements \ArrayAccess
     /**
      * Return the Fusion value relative to this Fusion object (with processors etc applied).
      *
-     * Note that subsequent calls of tsValue() with the same Fusion path will return the same values since the
+     * Note that subsequent calls of fusionValue() with the same Fusion path will return the same values since the
      * first evaluated value will be cached in memory.
      *
      * @param string $path
@@ -85,10 +85,10 @@ abstract class AbstractFusionObject implements \ArrayAccess
     protected function fusionValue($path)
     {
         $fullPath = $this->path . '/' . $path;
-        if (!isset($this->tsValueCache[$fullPath])) {
-            $this->tsValueCache[$fullPath] = $this->runtime->evaluate($fullPath, $this);
+        if (!isset($this->fusionValueCache[$fullPath])) {
+            $this->fusionValueCache[$fullPath] = $this->runtime->evaluate($fullPath, $this);
         }
-        return $this->tsValueCache[$fullPath];
+        return $this->fusionValueCache[$fullPath];
     }
 
     /**
@@ -97,7 +97,7 @@ abstract class AbstractFusionObject implements \ArrayAccess
      * @param mixed $offset
      * @return boolean
      */
-    public function offsetExists($offset)
+    public function offsetExists($offset): bool
     {
         return ($this->fusionValue($offset) !== null);
     }
@@ -108,7 +108,7 @@ abstract class AbstractFusionObject implements \ArrayAccess
      * @param mixed $offset
      * @return mixed
      */
-    public function offsetGet($offset)
+    public function offsetGet($offset): mixed
     {
         return $this->fusionValue($offset);
     }
@@ -120,7 +120,7 @@ abstract class AbstractFusionObject implements \ArrayAccess
      * @param mixed $value
      * @return void
      */
-    public function offsetSet($offset, $value)
+    public function offsetSet($offset, $value): void
     {
         // no op
     }
@@ -131,7 +131,7 @@ abstract class AbstractFusionObject implements \ArrayAccess
      * @param mixed $offset
      * @return void
      */
-    public function offsetUnset($offset)
+    public function offsetUnset($offset): void
     {
         // no op
     }

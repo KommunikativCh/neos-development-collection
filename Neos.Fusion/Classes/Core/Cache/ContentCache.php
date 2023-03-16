@@ -18,7 +18,7 @@ use Neos\Flow\Property\PropertyMapper;
 use Neos\Flow\Security\Context;
 use Neos\Flow\Utility\Algorithms;
 use Neos\Fusion\Exception;
-use Doctrine\ORM\Proxy\Proxy;
+use Doctrine\Persistence\Proxy;
 use Neos\Fusion\Exception\CacheException;
 
 /**
@@ -157,7 +157,7 @@ class ContentCache
      * @param string $cacheDiscriminator The evaluated cache discriminator value
      * @return string The original content, but with additional markers added
      */
-    public function createDynamicCachedSegment($content, $fusionPath, array $contextVariables, array $cacheIdentifierValues, array $tags = [], $lifetime = null, $cacheDiscriminator)
+    public function createDynamicCachedSegment($content, $fusionPath, array $contextVariables, array $cacheIdentifierValues, array $tags, $lifetime, $cacheDiscriminator)
     {
         $metadata = implode(',', $tags);
         if ($lifetime !== null) {
@@ -380,6 +380,17 @@ class ContentCache
     public function flushByTag($tag)
     {
         return $this->cache->flushByTag($this->sanitizeTag($tag));
+    }
+
+    /**
+     * Flush content cache entries by tags
+     *
+     * @param array<string> $tags values that were assigned to a cache entry in Fusion, for example "Everything", "Node_[…]", "NodeType_[…]", "DescendantOf_[…]" whereas "…" is the node identifier or node type respectively
+     * @return integer The number of cache entries which actually have been flushed
+     */
+    public function flushByTags(array $tags): int
+    {
+        return $this->cache->flushByTags($this->sanitizeTags($tags));
     }
 
     /**

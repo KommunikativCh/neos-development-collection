@@ -361,6 +361,9 @@
 			</trans-unit>
 
 			<!-- shortcuts -->
+      <trans-unit id="shortcut.toSpecificTarget" xml:space="preserve">
+        <source>This is a shortcut to a specific target:</source>
+      </trans-unit>
 			<trans-unit id="shortcut.clickToContinueToPage" xml:space="preserve">
 				<source>Click {0} to continue to the page.</source>
 			</trans-unit>
@@ -617,9 +620,6 @@
 			<trans-unit id="translate.requiredProperty" xml:space="preserve">
 				<source>Missing required property: </source>
 			</trans-unit>
-			<trans-unit id="workspace" xml:space="preserve">
-				<source>Workspace</source>
-			</trans-unit>
 			<trans-unit id="workspaces" xml:space="preserve">
 				<source>Workspaces</source>
 			</trans-unit>
@@ -820,15 +820,46 @@
 			<trans-unit id="ckeditor__toolbar__indent" xml:space="preserve">
 				<source>Indent</source>
 			</trans-unit>
-			<trans-unit id="createNew" xml:space="preserve">
-				<source>Create new</source>
-			</trans-unit>
 			<trans-unit id="noMatchesFound" xml:space="preserve">
 				<source>No matches found</source>
 			</trans-unit>
 			<trans-unit id="searchBoxLeftToType" xml:space="preserve">
 				<source>Please enter ###CHARACTERS### more character</source>
 			</trans-unit>
+
+			<trans-unit id="login.wrongCredentials.title" xml:space="preserve">
+				<source>Wrong Credentials</source>
+			</trans-unit>
+			<trans-unit id="login.wrongCredentials.body" xml:space="preserve">
+				<source>The entered username or password was wrong</source>
+			</trans-unit>
+			<trans-unit id="login.loggedOut.title" xml:space="preserve">
+				<source>Logged Out</source>
+			</trans-unit>
+			<trans-unit id="login.loggedOut.body" xml:space="preserve">
+				<source>Successfully logged out</source>
+			</trans-unit>
+			<trans-unit id="impersonate.success.impersonateUser" xml:space="preserve" approved="yes">
+                <source>Switched to the new user "{0}".</source>
+            </trans-unit>
+			<trans-unit id="impersonate.error.impersonateUser" xml:space="preserve" approved="yes">
+                <source>Could not switch to the selected user.</source>
+            </trans-unit>
+			<trans-unit id="impersonate.tooltip.impersonateUserButton" xml:space="preserve" approved="yes">
+                <source>Login as user</source>
+            </trans-unit>
+			<trans-unit id="impersonate.error.restoreUser" xml:space="preserve" approved="yes">
+                <source>Could not switch back to the original user.</source>
+            </trans-unit>
+			<trans-unit id="impersonate.success.restoreUser" xml:space="preserve" approved="yes">
+                <source>Switched back from "{0}" to the orginal user "{1}"</source>
+            </trans-unit>
+			<trans-unit id="impersonate.label.restoreUserButton" xml:space="preserve" approved="yes">
+                <source>Back to user "{0}"</source>
+            </trans-unit>
+			<trans-unit id="impersonate.title.restoreUserButton" xml:space="preserve" approved="yes">
+                <source>Switch back to the orginal user account</source>
+            </trans-unit>
 		</body>
 	</file>
 </xliff>

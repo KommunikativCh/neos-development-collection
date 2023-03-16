@@ -11,74 +11,32 @@ namespace Neos\Fusion\Tests\Unit\Core;
  * source code.
  */
 
-use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Neos\Flow\Tests\UnitTestCase;
+use Neos\Fusion\Core\FusionSourceCode;
+use Neos\Fusion\Core\FusionSourceCodeCollection;
 use Neos\Fusion\Core\Parser;
+use Neos\Fusion\Core\Cache\ParserCache;
 use Neos\Fusion\Exception;
-use Neos\Fusion\FusionObjects\ArrayImplementation;
 
 /**
  * Testcase for the Fusion Parser
  */
 class ParserTest extends UnitTestCase
 {
-    /**
-     * @var Parser
-     */
-    protected $parser;
+    protected Parser $parser;
 
-    /**
-     * @var ObjectManagerInterface
-     */
-    protected $mockObjectManager;
-
-    /**
-     * Sets up this test case
-     *
-     */
     public function setUp(): void
     {
-        $this->mockObjectManager = $this->createMock(ObjectManagerInterface::class);
-        $this->mockObjectManager->expects(self::any())->method('isRegistered')->will(self::returnCallback([$this, 'objectManagerIsRegisteredCallback']));
-
-        $this->parser = $this->getAccessibleMock(Parser::class, ['dummy']);
-        $this->parser->_set('objectManager', $this->mockObjectManager);
+        $this->parser = new Parser();
+        $this->injectParserCacheMockIntoParser($this->parser);
     }
 
-    /**
-     * call back for mocking the object factory
-     * @return object fixture objects ...
-     */
-    public function objectManagerCallback()
+    private function injectParserCacheMockIntoParser(Parser $parser): void
     {
-        $arguments = array_merge(func_get_args(), [$this->mockObjectManager]);
-        $objectName = array_shift($arguments);
-
-        $class = new \ReflectionClass($objectName);
-        return ($class->getConstructor() !== null) ? $class->newInstanceArgs($arguments) : $class->newInstance();
-    }
-
-    /**
-     * Call back for mocking the object manager's isRegistered() method
-     * @return boolean
-     */
-    public function objectManagerIsRegisteredCallback()
-    {
-        $arguments = array_merge(func_get_args(), [$this->mockObjectManager]);
-        $objectName = array_shift($arguments);
-        switch ($objectName) {
-            case 'Neos\Fusion\Fixtures\Text':
-            case 'Neos\Fusion\Fixtures\Page':
-            case 'Neos\Fusion\Fixtures\ContentArray':
-            case 'Neos\Fusion\Fixtures\ObjectWithArrayProperty':
-            case 'Neos\Fusion\Processors\WrapProcessor':
-            case 'Neos\Fusion\Processors\SubstringProcessor':
-            case 'Neos\Fusion\Processors\MultiplyProcessor':
-            case 'Neos\SomeOther\Namespace\MyWrapProcessor':
-                return true;
-            default:
-                return false;
-        }
+        $parserCache = $this->getMockBuilder(ParserCache::class)->getMock();
+        $parserCache->method('cacheForFusionFile')->will(self::returnCallback(fn ($_, $getValue) => $getValue()));
+        $parserCache->method('cacheForDsl')->will(self::returnCallback(fn ($_, $_2, $getValue) => $getValue()));
+        $this->inject($parser, 'parserCache', $parserCache);
     }
 
     /**
@@ -107,7 +65,7 @@ class ParserTest extends UnitTestCase
             ]
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
 
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 01.');
     }
@@ -121,7 +79,7 @@ class ParserTest extends UnitTestCase
     {
         $this->expectException(Exception::class);
         $sourceCode = 'namespace: cms=\-notvalid-\Fusion\Fixtures';
-        $this->parser->parse($sourceCode);
+        $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
     }
 
     /**
@@ -155,7 +113,7 @@ class ParserTest extends UnitTestCase
             ]
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 02.');
     }
 
@@ -202,7 +160,7 @@ class ParserTest extends UnitTestCase
             ]
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 03.');
     }
 
@@ -271,7 +229,7 @@ class ParserTest extends UnitTestCase
             ]
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 04.');
     }
 
@@ -340,7 +298,7 @@ class ParserTest extends UnitTestCase
             ],
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 05.');
     }
 
@@ -367,7 +325,7 @@ class ParserTest extends UnitTestCase
             ]
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 07.');
     }
 
@@ -431,7 +389,7 @@ class ParserTest extends UnitTestCase
             ]
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 08.');
     }
 
@@ -447,7 +405,7 @@ class ParserTest extends UnitTestCase
         $expectedParseTree = [
 
             'newObject1' => [
-                '__objectType' =>'Neos.Fusion:Text',
+                '__objectType' => 'Neos.Fusion:Text',
                 'value' => [
                     '__value' => 'Hello',
                     '__objectType' => null,
@@ -481,7 +439,7 @@ class ParserTest extends UnitTestCase
                 '__eelExpression' => null,
             ],
             'newObject2' => [
-                '__objectType' =>'Neos.Fusion:Text',
+                '__objectType' => 'Neos.Fusion:Text',
                 'value' => 'Hello',
                 '__meta' => [
                     'process' => [
@@ -510,7 +468,7 @@ class ParserTest extends UnitTestCase
             ]
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertEquals($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 10.');
     }
 
@@ -528,41 +486,41 @@ class ParserTest extends UnitTestCase
                 '__objectType' => 'Neos.Fusion:Text',
                 '__value' => null,
                 '__eelExpression' => null,
-                'value' => chr(10) . '	Some text.' . chr(10)
+                'value' => chr(10) . '  Some text.' . chr(10)
             ],
             'object2' => [
                 '__objectType' => 'Neos.Fusion:Text',
                 '__value' => null,
                 '__eelExpression' => null,
-                'value' => chr(10) . '	Some text.' . chr(10)
+                'value' => chr(10) . '  Some text.' . chr(10)
             ],
             'object3' => [
                 '__objectType' => 'Neos.Fusion:Text',
                 '__value' => null,
                 '__eelExpression' => null,
-                'value' => 'The text might start' . chr(10) . '	at some line\' and' . chr(10) . '	end at some other line'
+                'value' => 'The text might start' . chr(10) . '  at some line\' and' . chr(10) . '  end at some other line'
             ],
             'object4' => [
                 '__objectType' => 'Neos.Fusion:Text',
                 '__value' => null,
                 '__eelExpression' => null,
-                'value' => 'The text might start' . chr(10) . '	at some line "and' . chr(10) . '	end at some other line'
+                'value' => 'The text might start' . chr(10) . '  at some line "and' . chr(10) . '  end at some other line'
             ],
             'object5' => [
                 '__objectType' => 'Neos.Fusion:Text',
                 '__value' => null,
                 '__eelExpression' => null,
-                'value' => 'The text might start' . chr(10) . '	at "some" line and' . chr(10) . '	end at some other line'
+                'value' => 'The text might start' . chr(10) . '  at "some" line and' . chr(10) . '  end at some other line'
             ],
             'object6' => [
                 '__objectType' => 'Neos.Fusion:Text',
                 '__value' => null,
                 '__eelExpression' => null,
-                'value' => 'The text might start' . chr(10) . '	at \'some\' line and' . chr(10) . '	end at some other line'
+                'value' => 'The text might start' . chr(10) . '  at \'some\' line and' . chr(10) . '  end at some other line'
             ],
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 13.');
     }
 
@@ -602,7 +560,7 @@ class ParserTest extends UnitTestCase
             ],
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 14.');
     }
 
@@ -622,7 +580,7 @@ class ParserTest extends UnitTestCase
             ]
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 15.');
     }
 
@@ -675,27 +633,27 @@ class ParserTest extends UnitTestCase
                                 '__objectType' => null
                             ],
                             'blah3' => [
-                                '__eelExpression' => 'my.expression("as' . "		some stuff }		" . '" + "df")',
+                                '__eelExpression' => 'my.expression("as' . "    some stuff }    " . '" + "df")',
                                 '__value' => null,
                                 '__objectType' => null
                             ],
                             'multiline2' => [
-                                '__eelExpression' => "my.expression(		Foo.bar(\"foo\")	)",
+                                '__eelExpression' => "my.expression(    Foo.bar(\"foo\")  )",
                                 '__value' => null,
                                 '__objectType' => null
                             ],
                             'multiline3' => [
-                                '__eelExpression' => "		my.expression(			Bar.foo(\"bar\")		)	",
+                                '__eelExpression' => "    my.expression(      Bar.foo(\"bar\")    )  ",
                                 '__value' => null,
                                 '__objectType' => null
                             ],
                             'multiline4' => [
-                                '__eelExpression' => "my.expression(		\"bla\",		\"blubb\",		Test()	)",
+                                '__eelExpression' => "my.expression(    \"bla\",    \"blubb\",    Test()  )",
                                 '__value' => null,
                                 '__objectType' => null
                             ],
                             'multiline5' => [
-                                '__eelExpression' => "'col-sm-'+		String.split(q(node).parent().property('layout'), '-')[multiColumnIteration.index]",
+                                '__eelExpression' => "'col-sm-'+    String.split(q(node).parent().property('layout'), '-')[multiColumnIteration.index]",
                                 '__value' => null,
                                 '__objectType' => null
                             ]
@@ -714,11 +672,11 @@ class ParserTest extends UnitTestCase
     public function parserCorrectlyParsesFixture16()
     {
         $fixture = __DIR__ . '/Fixtures/ParserTestFusionFixture16.fusion';
-        $sourceCode = file_get_contents($fixture, FILE_TEXT);
+        $sourceCode = file_get_contents($fixture);
 
         $expectedParseTree = $this->getExpectedParseTreeForFixture16();
 
-        $actualParseTree = $this->parser->parse($sourceCode, $fixture);
+        $actualParseTree = $this->parser->parseFromSource(new FusionSourceCodeCollection(FusionSourceCode::fromDangerousPotentiallyDifferingSourceCodeAndFilePath($sourceCode, $fixture)))->toArray();
         self::assertEquals($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 16');
     }
 
@@ -729,9 +687,9 @@ class ParserTest extends UnitTestCase
     {
         $this->expectException(Exception::class);
         $fixture = __DIR__ . '/Fixtures/ParserTestFusionFixture16b.fusion';
-        $sourceCode = file_get_contents($fixture, FILE_TEXT);
+        $sourceCode = file_get_contents($fixture);
 
-        $this->parser->parse($sourceCode, $fixture);
+        $this->parser->parseFromSource(new FusionSourceCodeCollection(FusionSourceCode::fromDangerousPotentiallyDifferingSourceCodeAndFilePath($sourceCode, $fixture)))->toArray();
     }
 
     /**
@@ -740,7 +698,7 @@ class ParserTest extends UnitTestCase
     public function parserCorrectlyParsesFixture17()
     {
         $fixture = __DIR__ . '/Fixtures/ParserTestFusionFixture17.fusion';
-        $sourceCode = file_get_contents($fixture, FILE_TEXT);
+        $sourceCode = file_get_contents($fixture);
 
         $expectedParseTree = $this->getExpectedParseTreeForFixture16();
 
@@ -765,66 +723,8 @@ class ParserTest extends UnitTestCase
         // Test globbing with dots
         $expectedParseTree['globbingWithDots1'] = $text;
 
-        $actualParseTree = $this->parser->parse($sourceCode, $fixture);
+        $actualParseTree = $this->parser->parseFromSource(new FusionSourceCodeCollection(FusionSourceCode::fromDangerousPotentiallyDifferingSourceCodeAndFilePath($sourceCode, $fixture)))->toArray();
         self::assertEquals($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 17');
-    }
-
-    /**
-     * Checks if namespace declarations are expanded correctly
-     *
-     * @test
-     */
-    public function parserCorrectlyParsesFixture18()
-    {
-        $sourceCode = $this->readFusionFixture('ParserTestFusionFixture18');
-
-        $expectedParseTree = [
-            'object1' => [
-                '__objectType' => 'Neos.Neos:Text',
-                '__value' => null,
-                '__eelExpression' => null
-            ],
-            'object2' => [
-                '__objectType' => 'Neos.Neos:Text',
-                '__value' => null,
-                '__eelExpression' => null
-            ],
-            'object3' => [
-                '__objectType' => 'Neos.Schirmchen:Text',
-                '__value' => null,
-                '__eelExpression' => null
-            ],
-            'object4' => [
-                '__objectType' => 'Neos.Future:Text',
-                '__value' => null,
-                '__eelExpression' => null
-            ],
-            '__prototypes' => [
-                'Neos.Neos:Foo' => [
-                    '__meta' => [
-                        'class' => ArrayImplementation::class
-                    ]
-                ],
-                'Neos.Neos:Bar' => [
-                    '__meta' => [
-                        'class' => ArrayImplementation::class
-                    ]
-                ],
-                'Neos.Schirmchen:Baz' => [
-                    '__meta' => [
-                        'class' => ArrayImplementation::class
-                    ]
-                ],
-                'Neos.Future:Quux' => [
-                    '__meta' => [
-                        'class' => ArrayImplementation::class
-                    ]
-                ]
-            ]
-        ];
-
-        $actualParseTree = $this->parser->parse($sourceCode);
-        self::assertEquals($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 18.');
     }
 
     /**
@@ -846,7 +746,7 @@ class ParserTest extends UnitTestCase
             ],
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 19.');
     }
 
@@ -872,7 +772,7 @@ class ParserTest extends UnitTestCase
             ],
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 20.');
     }
 
@@ -883,7 +783,7 @@ class ParserTest extends UnitTestCase
     {
         $this->expectException(Exception::class);
         $sourceCode = $this->readFusionFixture('ParserTestFusionFixture21');
-        $this->parser->parse($sourceCode);
+        $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
     }
 
     /**
@@ -893,7 +793,7 @@ class ParserTest extends UnitTestCase
     {
         $this->expectException(Exception::class);
         $sourceCode = $this->readFusionFixture('ParserTestFusionFixture22');
-        $this->parser->parse($sourceCode);
+        $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
     }
 
     /**
@@ -916,7 +816,27 @@ class ParserTest extends UnitTestCase
             ],
         ];
 
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
+        self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 23.');
+    }
+
+    /**
+     * Checks if identifiers starting with digits are parsed correctly
+     *
+     * @test
+     */
+    public function parserCorrectlyParsesFixture25()
+    {
+        $sourceCode = $this->readFusionFixture('ParserTestFusionFixture25');
+
+        $expectedParseTree = [
+            'attributes' => [
+                '@notAMeta' => 'value',
+                '@notAMeta.notNested.reallyNotNested.string' => 'value'
+            ]
+        ];
+
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertSame($expectedParseTree, $actualParseTree, 'The parse tree was not as expected after parsing fixture 23.');
     }
 
@@ -928,7 +848,7 @@ class ParserTest extends UnitTestCase
     public function parserCorrectlyLongStrings()
     {
         $sourceCode = $this->readFusionFixture('ParserTestFusionFixtureLongString');
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertArrayHasKey('longString', $actualParseTree);
     }
 
@@ -941,30 +861,31 @@ class ParserTest extends UnitTestCase
     {
         $sourceCode = $this->readFusionFixture('ParserTestFusionComments01');
         $expected = []; // Fixture contains only comments, so expect empty parse tree
-        $actualParseTree = $this->parser->parse($sourceCode);
+        $actualParseTree = $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
         self::assertEquals($expected, $actualParseTree, 'The parse tree was not as expected after parsing fixture `ParserTestFusionComments01.fusion`');
     }
 
     /**
-     * Checks if dsl value is handed over to the invokeAndParseDsl method
+     * Checks if dsl value is handed over to the handleDslTranspile method
      *
      * @test
      */
     public function parserInvokesFusionDslParsingIfADslPatternIsDetected()
     {
-        $parser = $this->getMockBuilder(Parser::class)->disableOriginalConstructor()->setMethods(['invokeAndParseDsl'])->getMock();
+        $parser = $this->getMockBuilder(Parser::class)->disableOriginalConstructor()->onlyMethods(['handleDslTranspile'])->getMock();
+        $this->injectParserCacheMockIntoParser($parser);
 
         $sourceCode = $this->readFusionFixture('ParserTestFusionFixture24');
 
         $parser
             ->expects($this->exactly(2))
-            ->method('invokeAndParseDsl')
+            ->method('handleDslTranspile')
             ->withConsecutive(
-                ['dsl1', 'example value' ],
-                ['dsl2', 'another' . chr(10) . 'multiline' . chr(10) . 'value' ]
+                ['dsl1', 'example value'],
+                ['dsl2', 'another' . chr(10) . 'multiline' . chr(10) . 'value']
             );
 
-        $parser->parse($sourceCode);
+        $parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString($sourceCode))->toArray();
     }
 
     /**
@@ -976,7 +897,7 @@ class ParserTest extends UnitTestCase
     {
         $this->expectException(Exception::class);
         $this->expectExceptionCode(1490714685);
-        $this->parser->parse('dslValue1 = dsl1`unclosed dsl expression');
+        $this->parser->parseFromSource(\Neos\Fusion\Core\FusionSourceCodeCollection::fromString('dslValue1 = dsl1`unclosed dsl expression'))->toArray();
     }
 
     /**
@@ -985,6 +906,6 @@ class ParserTest extends UnitTestCase
      */
     protected function readFusionFixture($fixtureName)
     {
-        return file_get_contents(__DIR__ . '/Fixtures/' . $fixtureName . '.fusion', FILE_TEXT);
+        return file_get_contents(__DIR__ . '/Fixtures/' . $fixtureName . '.fusion');
     }
 }

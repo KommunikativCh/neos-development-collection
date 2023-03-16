@@ -36,6 +36,7 @@ class CreationDialogPostprocessorTest extends UnitTestCase
                     'ui' => [
                         'showInCreationDialog' => true,
                         'inspector' => [
+                            'position' => 123,
                             'editor' => 'Some\Editor',
                             'editorOptions' => ['some' => 'option'],
                         ],
@@ -47,7 +48,6 @@ class CreationDialogPostprocessorTest extends UnitTestCase
                             'maximum' => 255,
                         ]
                     ],
-                    'position' => 123,
                 ],
             ],
         ];
@@ -192,45 +192,6 @@ class CreationDialogPostprocessorTest extends UnitTestCase
                     'label' => 'somePropertyName',
                     'editor' => 'Some\Editor',
                     'editorOptions' => ['some' => 'option', 'someDefault' => 'fromDataType', 'someEditorDefault' => 'fromEditor'],
-                ],
-            ],
-        ];
-
-        self::assertSame($expectedElements, $configuration['ui']['creationDialog']['elements']);
-    }
-
-    /**
-     * @test
-     */
-    public function processDisablesUnsupportedEditors(): void
-    {
-        $configuration = [
-            'properties' => [
-                'somePropertyName' => [
-                    'ui' => [
-                        'showInCreationDialog' => true,
-                        'inspector' => [
-                            'editor' => 'Neos.Neos/Inspector/Editors/ImageEditor',
-                        ],
-                    ],
-                ],
-            ],
-        ];
-
-        $this->creationDialogPostprocessor->process($this->mockNodeType, $configuration, []);
-
-        $expectedElements = [
-            'somePropertyName' => [
-                'type' => 'string',
-                'ui' => [
-                    'label' => 'somePropertyName',
-                    'help' => [
-                        'message' => 'The "Neos.Neos/Inspector/Editors/ImageEditor" editor is currently not supported in the Creation Dialog',
-                    ],
-                    'editor' => 'Neos.Neos/Inspector/Editors/ImageEditor',
-                    'editorOptions' => [
-                        'disabled' => true,
-                    ]
                 ],
             ],
         ];

@@ -84,7 +84,7 @@ class Runtime
      *
      * @var array
      */
-    protected $currentContext = null;
+    protected $currentContext = [];
 
     /**
      * Reference to the current apply value
@@ -130,15 +130,13 @@ class Runtime
      */
     protected $lastEvaluationStatus;
 
-    /**
-     * Constructor for the Fusion Runtime
-     *
-     * @param array $fusionConfiguration
-     * @param ControllerContext $controllerContext
-     */
-    public function __construct(array $fusionConfiguration, ControllerContext $controllerContext)
+    public function __construct(FusionConfiguration|array $fusionConfiguration, ControllerContext $controllerContext)
     {
-        $this->runtimeConfiguration = new RuntimeConfiguration($fusionConfiguration);
+        $this->runtimeConfiguration = new RuntimeConfiguration(
+            $fusionConfiguration instanceof FusionConfiguration
+                ? $fusionConfiguration->toArray()
+                : $fusionConfiguration
+        );
         $this->controllerContext = $controllerContext;
         $this->runtimeContentCache = new RuntimeContentCache($this);
     }
@@ -163,7 +161,7 @@ class Runtime
     /**
      * Add a tag to the current cache segment
      *
-     * During TS rendering the method can be used to add tag dynamicaly for the current cache segment.
+     * During Fusion rendering the method can be used to add tag dynamicaly for the current cache segment.
      *
      * @param string $key
      * @param string $value
@@ -215,7 +213,7 @@ class Runtime
     public function popContext()
     {
         $lastItem = array_pop($this->contextStack);
-        $this->currentContext = end($this->contextStack);
+        $this->currentContext = empty($this->contextStack) ? [] : end($this->contextStack);
         return $lastItem;
     }
 
@@ -259,7 +257,8 @@ class Runtime
         try {
             $output = $this->evaluate($fusionPath, null, self::BEHAVIOR_EXCEPTION);
             if ($this->debugMode) {
-                $output = sprintf('%1$s<!-- Beginning to render TS path "%2$s" (Context: %3$s) -->%4$s%1$s<!-- End to render TS path "%2$s" (Context: %3$s) -->',
+                $output = sprintf(
+                    '%1$s<!-- Beginning to render Fusion path "%2$s" (Context: %3$s) -->%4$s%1$s<!-- End to render Fusion path "%2$s" (Context: %3$s) -->',
                     chr(10),
                     $fusionPath,
                     implode(', ', array_keys($this->currentContext)),
@@ -277,7 +276,7 @@ class Runtime
 
     /**
      * Handle an Exception thrown while rendering Fusion according to
-     * settings specified in Neos.Fusion.rendering.exceptionHandler
+     * settings specified in Neos.Fusion.rendering.exceptionHandler or {@exceptionHandler}
      *
      * @param string $fusionPath
      * @param \Exception $exception
@@ -288,49 +287,44 @@ class Runtime
      * @throws SecurityException
      * @throws StopActionException
      */
-    public function handleRenderingException($fusionPath, \Exception $exception, $useInnerExceptionHandler = false)
+    public function handleRenderingException(string $fusionPath, \Exception $exception, bool $useInnerExceptionHandler = false)
     {
         $fusionConfiguration = $this->runtimeConfiguration->forPath($fusionPath);
 
-        if (isset($fusionConfiguration['__meta']['exceptionHandler'])) {
-            $exceptionHandlerClass = $fusionConfiguration['__meta']['exceptionHandler'];
-            $invalidExceptionHandlerMessage = 'The class "%s" is not valid for property "@exceptionHandler".';
-        } else {
-            if ($useInnerExceptionHandler === true) {
-                $exceptionHandlerClass = $this->settings['rendering']['innerExceptionHandler'];
-            } else {
-                $exceptionHandlerClass = $this->settings['rendering']['exceptionHandler'];
-            }
-            $invalidExceptionHandlerMessage = 'The class "%s" is not valid for setting "Neos.Fusion.rendering.exceptionHandler".';
-        }
+        $useLocalExceptionHandler = isset($fusionConfiguration['__meta']['exceptionHandler']);
+        $exceptionHandlerClass = $useLocalExceptionHandler
+            // use local configured @exceptionHandler
+            ? $fusionConfiguration['__meta']['exceptionHandler']
+            // use global configured exception handler
+            : $this->settings['rendering'][$useInnerExceptionHandler ? 'innerExceptionHandler' : 'exceptionHandler'];
+
         $exceptionHandler = null;
         if ($this->objectManager->isRegistered($exceptionHandlerClass)) {
             $exceptionHandler = $this->objectManager->get($exceptionHandlerClass);
         }
 
-        if ($exceptionHandler === null || !($exceptionHandler instanceof AbstractRenderingExceptionHandler)) {
-            $message = sprintf(
-                $invalidExceptionHandlerMessage . "\n" .
-                'Please specify a fully qualified classname to a subclass of %2$s\AbstractRenderingExceptionHandler.' . "\n" .
-                'You might implement an own handler or use one of the following:' . "\n" .
-                '%2$s\AbsorbingHandler' . "\n" .
-                '%2$s\HtmlMessageHandler' . "\n" .
-                '%2$s\PlainTextHandler' . "\n" .
-                '%2$s\ThrowingHandler' . "\n" .
-                '%2$s\XmlCommentHandler',
-                $exceptionHandlerClass,
-                'Neos\Fusion\Core\ExceptionHandlers'
-            );
-            throw new InvalidConfigurationException($message, 1368788926);
+        if ($exceptionHandler instanceof AbstractRenderingExceptionHandler === false) {
+            $usedExceptionHandler = $useLocalExceptionHandler
+                ? 'property "@exceptionHandler"'
+                : 'setting "Neos.Fusion.rendering.exceptionHandler"';
+
+            throw new InvalidConfigurationException(<<<MESSAGE
+                The class \"$exceptionHandlerClass\" is not valid for $usedExceptionHandler
+                Please specify a fully qualified classname to a subclass of Neos\Fusion\Core\ExceptionHandlers\AbstractRenderingExceptionHandler.
+                You might implement an own handler or use one of the following:
+                Neos\Fusion\Core\ExceptionHandlers\AbsorbingHandler
+                Neos\Fusion\Core\ExceptionHandlers\HtmlMessageHandler
+                Neos\Fusion\Core\ExceptionHandlers\PlainTextHandler
+                Neos\Fusion\Core\ExceptionHandlers\ThrowingHandler
+                Neos\Fusion\Core\ExceptionHandlers\XmlCommentHandler
+                MESSAGE, 1368788926);
         }
 
         $exceptionHandler->setRuntime($this);
         if (array_key_exists('__objectType', $fusionConfiguration)) {
-            $fusionPath .= sprintf('<%s>', $fusionConfiguration['__objectType']);
+            $fusionPath .= "<{$fusionConfiguration['__objectType']}>";
         }
-        $output = $exceptionHandler->handleRenderingException($fusionPath, $exception);
-
-        return $output;
+        return $exceptionHandler->handleRenderingException($fusionPath, $exception);
     }
 
     /**
@@ -361,7 +355,7 @@ class Runtime
      *
      * @param string $fusionPath
      * @param mixed $contextObject The object which will be "this" in Eel expressions. ONLY FOR INTERNAL USE!
-     * @param string $behaviorIfPathNotFound One of BEHAVIOR_EXCEPTION or BEHAVIOR_RETURNNULL
+     * @param (Runtime::BEHAVIOR_EXCEPTION|Runtime::BEHAVIOR_RETURNNULL) $behaviorIfPathNotFound
      * @return mixed
      *
      * @throws StopActionException
@@ -372,15 +366,15 @@ class Runtime
      */
     public function evaluate(string $fusionPath, $contextObject = null, string $behaviorIfPathNotFound = self::BEHAVIOR_RETURNNULL)
     {
-        $needToPopContext = false;
-        $needToPopApply = false;
         $this->lastEvaluationStatus = self::EVALUATION_EXECUTED;
 
         $fusionConfiguration = $this->runtimeConfiguration->forPath($fusionPath);
 
-        // Check if the current "@apply" contain an entry for the requested fusionPath
-        // in which case this value is returned after applying @if and @process rules
         if (isset($this->currentApplyValues[$fusionPath])) {
+            // the $fusionPath is an @apply value
+            // we evaluate @if and @process
+            // when the @apply value is lazy we trigger the evaluation
+            // we return directly
             if (isset($fusionConfiguration['__meta']['if']) && $this->evaluateIfCondition($fusionConfiguration, $fusionPath, $contextObject) === false) {
                 return null;
             }
@@ -394,52 +388,55 @@ class Runtime
             return $appliedValue;
         }
 
-        // Fast path for expression or value
-        try {
-            if (isset($fusionConfiguration['__eelExpression']) || isset($fusionConfiguration['__value'])) {
+        if (isset($fusionConfiguration['__eelExpression']) || isset($fusionConfiguration['__value'])) {
+            // fast path for expression or value
+            try {
                 return $this->evaluateExpressionOrValueInternal($fusionPath, $fusionConfiguration, $contextObject);
+            } catch (StopActionException | SecurityException | RuntimeException $exception) {
+                throw $exception;
+            } catch (\Exception $exception) {
+                return $this->handleRenderingException($fusionPath, $exception, true);
             }
-        } catch (StopActionException $stopActionException) {
-            throw $stopActionException;
-        } catch (SecurityException $securityException) {
-            throw $securityException;
-        } catch (RuntimeException $runtimeException) {
-            throw $runtimeException;
-        } catch (\Exception $exception) {
-            return $this->handleRenderingException($fusionPath, $exception, true);
         }
 
-        $cacheContext = $this->runtimeContentCache->enter(isset($fusionConfiguration['__meta']['cache']) ? $fusionConfiguration['__meta']['cache'] : [], $fusionPath);
-
-        if (!(isset($fusionConfiguration['__meta']['class']) && isset($fusionConfiguration['__objectType']))) {
-            $this->finalizePathEvaluation($cacheContext);
-            $this->throwExceptionForUnrenderablePathIfNeeded($fusionPath, $fusionConfiguration, $behaviorIfPathNotFound);
-            $this->lastEvaluationStatus = self::EVALUATION_SKIPPED;
-            return null;
-        }
-
+        // render fusion object
+        $cacheContext = $this->runtimeContentCache->enter($fusionConfiguration['__meta']['cache'] ?? [], $fusionPath);
+        $needToPopContext = false;
         $applyPathsToPop = [];
         try {
-            $applyPathsToPop = $this->prepareApplyValuesForFusionPath($fusionPath, $fusionConfiguration);
-            $fusionObject = $this->instantiatefusionObject($fusionPath, $fusionConfiguration);
-            $needToPopContext = $this->prepareContextForFusionObject($fusionObject, $fusionPath, $fusionConfiguration, $cacheContext);
-            $output = $this->evaluateObjectOrRetrieveFromCache($fusionObject, $fusionPath, $fusionConfiguration, $cacheContext);
-        } catch (StopActionException $stopActionException) {
-            $this->finalizePathEvaluation($cacheContext, $needToPopContext, $applyPathsToPop);
-            throw $stopActionException;
-        } catch (SecurityException $securityException) {
-            $this->finalizePathEvaluation($cacheContext, $needToPopContext, $applyPathsToPop);
-            throw $securityException;
-        } catch (RuntimeException $runtimeException) {
-            $this->finalizePathEvaluation($cacheContext, $needToPopContext, $applyPathsToPop);
-            throw $runtimeException;
-        } catch (\Exception $exception) {
-            $this->finalizePathEvaluation($cacheContext, $needToPopContext, $applyPathsToPop);
-            return $this->handleRenderingException($fusionPath, $exception, true);
-        }
+            if (isset($fusionConfiguration['__meta']['class']) === false
+                || isset($fusionConfiguration['__objectType']) === false) {
+                // fusion object not found / cannot be rendered
+                $this->throwExceptionForUnrenderablePathIfNeeded($fusionPath, $fusionConfiguration, $behaviorIfPathNotFound);
+                $this->lastEvaluationStatus = self::EVALUATION_SKIPPED;
+                return null;
+            }
 
-        $this->finalizePathEvaluation($cacheContext, $needToPopContext, $applyPathsToPop);
-        return $output;
+            $applyPathsToPop = $this->prepareApplyValuesForFusionPath($fusionPath, $fusionConfiguration);
+            $fusionObject = $this->instantiatefusionObject($fusionPath, $fusionConfiguration, $applyPathsToPop);
+            $needToPopContext = $this->prepareContextForFusionObject($fusionObject, $fusionPath, $fusionConfiguration, $cacheContext);
+            return $this->evaluateObjectOrRetrieveFromCache($fusionObject, $fusionPath, $fusionConfiguration, $cacheContext);
+        } catch (
+            StopActionException
+            | SecurityException
+            | RuntimeException
+            | Exception\MissingFusionImplementationException
+            | Exception\MissingFusionObjectException
+            $exception
+        ) {
+            throw $exception;
+        } catch (\Exception $exception) {
+            return $this->handleRenderingException($fusionPath, $exception, true);
+        } finally {
+            // ends the evaluation of a fusion path
+            if ($needToPopContext) {
+                $this->popContext();
+            }
+            if ($applyPathsToPop !== []) {
+                $this->popApplyValues($applyPathsToPop);
+            }
+            $this->runtimeContentCache->leave($cacheContext);
+        }
     }
 
     /**
@@ -564,7 +561,7 @@ class Runtime
         }
 
         if (isset($fusionConfiguration['__meta']['context'])) {
-            $newContextArray = isset($newContextArray) ? $newContextArray : $this->currentContext;
+            $newContextArray ??= $this->currentContext;
             foreach ($fusionConfiguration['__meta']['context'] as $contextKey => $contextValue) {
                 $newContextArray[$contextKey] = $this->evaluate($fusionPath . '/__meta/context/' . $contextKey, $fusionObject, self::BEHAVIOR_EXCEPTION);
             }
@@ -579,83 +576,58 @@ class Runtime
     }
 
     /**
-     * Ends the evaluation of a fusion path by popping the context and property stack if needed and leaving the cache context.
-     *
-     * @param array $cacheContext
-     * @param boolean $needToPopContext
-     * @param array $applyPathsToPop
-     * @return void
-     */
-    protected function finalizePathEvaluation($cacheContext, $needToPopContext = false, array $applyPathsToPop = [])
-    {
-        if ($needToPopContext) {
-            $this->popContext();
-        }
-
-        if ($applyPathsToPop !== []) {
-            $this->popApplyValues($applyPathsToPop);
-        }
-
-        $this->runtimeContentCache->leave($cacheContext);
-    }
-
-    /**
      * Instantiates a Fusion object specified by the given path and configuration
      *
      * @param string $fusionPath Path to the configuration for this object instance
      * @param array $fusionConfiguration Configuration at the given path
+     * @param array $applyValuePaths Apply value paths for this object
      * @return AbstractFusionObject
      * @throws Exception
      */
-    protected function instantiateFusionObject($fusionPath, $fusionConfiguration)
+    protected function instantiateFusionObject($fusionPath, $fusionConfiguration, array $applyValuePaths)
     {
         $fusionObjectType = $fusionConfiguration['__objectType'];
 
-        $fusionObjectClassName = isset($fusionConfiguration['__meta']['class']) ? $fusionConfiguration['__meta']['class'] : null;
+        $fusionObjectClassName = $fusionConfiguration['__meta']['class'] ?? null;
 
         if (!preg_match('#<[^>]*>$#', $fusionPath)) {
             // Only add Fusion object type to last path part if not already set
             $fusionPath .= '<' . $fusionObjectType . '>';
         }
         if (!class_exists($fusionObjectClassName)) {
-            throw new Exception(sprintf(
-                'The implementation class `%s` defined for Fusion object of type `%s` does not exist.
-				Maybe a typo in the `@class` property.',
-                $fusionObjectClassName, $fusionObjectType), 1347952109);
+            throw new Exception(<<<MESSAGE
+                The implementation class "$fusionObjectClassName" defined for Fusion object of type "$fusionObjectType" does not exist.
+                Maybe a typo in the "@class" property.
+                MESSAGE, 1347952109);
         }
 
         /** @var $fusionObject AbstractFusionObject */
         $fusionObject = new $fusionObjectClassName($this, $fusionPath, $fusionObjectType);
-        if ($this->isArrayFusionObject($fusionObject)) {
+        if ($this->shouldAssignPropertiesToFusionObject($fusionObject)) {
             /** @var $fusionObject AbstractArrayFusionObject */
             if (isset($fusionConfiguration['__meta']['ignoreProperties'])) {
                 $evaluatedIgnores = $this->evaluate($fusionPath . '/__meta/ignoreProperties', $fusionObject);
                 $fusionObject->setIgnoreProperties(is_array($evaluatedIgnores) ? $evaluatedIgnores : []);
             }
-            $this->setPropertiesOnFusionObject($fusionObject, $fusionConfiguration);
+            $this->assignPropertiesToFusionObject($fusionObject, $fusionConfiguration, $applyValuePaths);
         }
         return $fusionObject;
     }
 
     /**
-     * Check if the given object is an array like object that should get all properties set to iterate or process internally.
+     * Is the given object an array like object that should get all properties assigned to iterate or process internally
      *
-     * @param AbstractFusionObject $fusionObject
-     * @return boolean
+     * @psalm-assert-if-true AbstractArrayFusionObject $fusionObject
      */
-    protected function isArrayFusionObject(AbstractFusionObject $fusionObject)
+    protected function shouldAssignPropertiesToFusionObject(AbstractFusionObject $fusionObject): bool
     {
-        return ($fusionObject instanceof AbstractArrayFusionObject);
+        return $fusionObject instanceof AbstractArrayFusionObject;
     }
 
     /**
-     * Set options on the given (AbstractArray)Fusion object
-     *
-     * @param AbstractArrayFusionObject $fusionObject
-     * @param array $fusionConfiguration
-     * @return void
+     * Assigns paths to the Array-Fusion object
      */
-    protected function setPropertiesOnFusionObject(AbstractArrayFusionObject $fusionObject, array $fusionConfiguration)
+    protected function assignPropertiesToFusionObject(AbstractArrayFusionObject $fusionObject, array $fusionConfiguration, array $applyValuePaths): void
     {
         foreach ($fusionConfiguration as $key => $value) {
             // skip keys which start with __, as they are purely internal.
@@ -666,10 +638,11 @@ class Runtime
             ObjectAccess::setProperty($fusionObject, $key, $value);
         }
 
-        if (is_array($this->currentApplyValues)) {
-            foreach ($this->currentApplyValues as $path => $property) {
-                $key = $property['key'];
-                if (isset($property['lazy'])) {
+        if ($applyValuePaths !== []) {
+            foreach ($applyValuePaths as $path) {
+                $entry = $this->currentApplyValues[$path];
+                $key = $entry['key'];
+                if (isset($entry['lazy'])) {
                     $valueAst = [
                         '__eelExpression' => null,
                         // Mark this property as not having a simple value in the AST -
@@ -681,7 +654,7 @@ class Runtime
                     $valueAst = [
                         '__eelExpression' => null,
                         '__objectType' => null,
-                        '__value' => $property['value']
+                        '__value' => $entry['value']
                     ];
                 }
 
@@ -691,7 +664,7 @@ class Runtime
                     $valueAst['__meta'] = $meta;
                 }
 
-                ObjectAccess::setProperty($fusionObject, $property['key'], $valueAst);
+                ObjectAccess::setProperty($fusionObject, $entry['key'], $valueAst);
             }
         }
     }
@@ -767,10 +740,8 @@ class Runtime
                     $singleApplyPath .= '/expression';
                 }
                 $singleApplyValues = $this->evaluate($singleApplyPath, null, self::BEHAVIOR_EXCEPTION);
-                if ($this->getLastEvaluationStatus() !== static::EVALUATION_SKIPPED) {
-                    if ($singleApplyValues === null) {
-                        continue;
-                    } elseif (is_array($singleApplyValues)) {
+                if ($singleApplyValues !== null || $this->getLastEvaluationStatus() !== static::EVALUATION_SKIPPED) {
+                    if (is_array($singleApplyValues)) {
                         foreach ($singleApplyValues as $key => $value) {
                             // skip keys which start with __, as they are purely internal.
                             if ($key[0] === '_' && $key[1] === '_' && in_array($key, Parser::$reservedParseTreeKeys, true)) {
@@ -821,7 +792,7 @@ class Runtime
             }
 
             # If there is only the internal "__stopInheritanceChain" path set, skip evaluation
-            if (count($processorConfiguration[$key]) === 1 && isset($processorConfiguration[$key]['__stopInheritanceChain'])) {
+            if (isset($processorConfiguration[$key]['__stopInheritanceChain']) && count($processorConfiguration[$key]) === 1) {
                 continue;
             }
 
@@ -831,7 +802,7 @@ class Runtime
 
             $this->pushContext('value', $valueToProcess);
             $result = $this->evaluate($processorPath, $contextObject, self::BEHAVIOR_EXCEPTION);
-            if ($this->getLastEvaluationStatus() !== static::EVALUATION_SKIPPED) {
+            if ($result !== null || $this->getLastEvaluationStatus() !== static::EVALUATION_SKIPPED) {
                 $valueToProcess = $result;
             }
             $this->popContext();
@@ -901,22 +872,22 @@ class Runtime
     {
         if (isset($fusionConfiguration['__objectType'])) {
             $objectType = $fusionConfiguration['__objectType'];
-            throw new Exceptions\MissingFusionImplementationException(sprintf(
-                "The Fusion object `%s` cannot be rendered:
-					Most likely you mistyped the prototype name or did not define 
-					the Fusion prototype with `prototype(%s) < prototype ...` . 
-					Other possible reasons are a missing parent-prototype or 
-					a missing `@class` annotation for prototypes without parent.
-					It is also possible your Fusion file is not read because 
-					of a missing `include:` statement.",
-                $objectType, $objectType), 1332493995);
+            throw new Exceptions\MissingFusionImplementationException(<<<MESSAGE
+                The Fusion object "$objectType" cannot be rendered:
+                Most likely you mistyped the prototype name or did not define
+                the Fusion prototype with "prototype($objectType) < prototype(...)".
+                Other possible reasons are a missing parent-prototype or
+                a missing "@class" annotation for prototypes without parent.
+                It is also possible your Fusion file is not read because
+                of a missing "include:" statement.
+                MESSAGE, 1332493995);
         }
 
         if ($behaviorIfPathNotFound === self::BEHAVIOR_EXCEPTION) {
-            throw new Exceptions\MissingFusionObjectException(sprintf(
-                'No Fusion object found in path "%s"
-					Please make sure to define one in your Fusion configuration.', $fusionPath
-            ), 1332493990);
+            throw new Exceptions\MissingFusionObjectException(<<<MESSAGE
+                No Fusion object found in path "$fusionPath"
+                Please make sure to define one in your Fusion configuration.
+                MESSAGE, 1332493990);
         }
     }
 

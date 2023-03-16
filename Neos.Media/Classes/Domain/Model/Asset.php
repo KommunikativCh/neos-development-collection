@@ -23,6 +23,7 @@ use Neos\Media\Domain\Model\AssetSource\AssetNotFoundExceptionInterface;
 use Neos\Media\Domain\Model\AssetSource\AssetProxy\AssetProxyInterface;
 use Neos\Media\Domain\Model\AssetSource\AssetSourceInterface;
 use Neos\Media\Domain\Model\AssetSource\AssetSourceConnectionExceptionInterface;
+use Neos\Media\Domain\Model\AssetSource\Neos\NeosAssetSource;
 use Neos\Media\Domain\Repository\ImportedAssetRepository;
 use Neos\Media\Domain\Repository\AssetRepository;
 use Neos\Media\Domain\Service\AssetService;
@@ -389,10 +390,10 @@ class Asset implements AssetInterface
         $assetClassType = str_replace('Neos\Media\Domain\Model\\', '', get_class($this));
         $this->systemLogger->debug(sprintf('%s: refresh() called, clearing all thumbnails. Filename: %s. PersistentResource SHA1: %s', $assetClassType, $this->getResource()->getFilename(), $this->getResource()->getSha1()));
 
-        // whitelist objects so they can be deleted (even during safe requests)
-        $this->persistenceManager->whitelistObject($this);
+        // allow objects so they can be deleted (even during safe requests)
+        $this->persistenceManager->allowObject($this);
         foreach ($this->thumbnails as $thumbnail) {
-            $this->persistenceManager->whitelistObject($thumbnail);
+            $this->persistenceManager->allowObject($thumbnail);
         }
 
         $this->thumbnails->clear();
@@ -447,19 +448,20 @@ class Asset implements AssetInterface
     public function setAssetCollections(Collection $assetCollections)
     {
         $this->lastModified = new \DateTime();
+
         foreach ($this->assetCollections as $existingAssetCollection) {
             if (!$assetCollections->contains($existingAssetCollection)) {
                 $existingAssetCollection->removeAsset($this);
+                $this->persistenceManager->update($existingAssetCollection);
             }
         }
+
         foreach ($assetCollections as $newAssetCollection) {
-            $newAssetCollection->addAsset($this);
-        }
-        foreach ($this->assetCollections as $assetCollection) {
-            if (!$assetCollections->contains($assetCollection)) {
-                $assetCollections->add($assetCollection);
+            if (!$this->assetCollections->contains($newAssetCollection)) {
+                $newAssetCollection->addAsset($this);
             }
         }
+
         $this->assetCollections = $assetCollections;
     }
 
@@ -495,10 +497,15 @@ class Asset implements AssetInterface
             $this->systemLogger->notice(sprintf('Asset %s: Invalid asset source "%s"', $this->getIdentifier(), $this->getAssetSourceIdentifier()), LogEnvironment::fromMethodName(__METHOD__));
             return null;
         }
-        $importedAsset = $this->importedAssetRepository->findOneByLocalAssetIdentifier($this->getIdentifier());
-        if ($importedAsset === null) {
-            $this->systemLogger->notice(sprintf('Asset %s: Imported asset not found for asset source %s (%s)', $this->getIdentifier(), $assetSource->getIdentifier(), $assetSource->getLabel()), LogEnvironment::fromMethodName(__METHOD__));
-            return null;
+
+        if (!$assetSource instanceof NeosAssetSource) {
+            $importedAsset = $this->importedAssetRepository->findOneByLocalAssetIdentifier($this->getIdentifier());
+            if ($importedAsset === null) {
+                $this->systemLogger->notice(sprintf('Asset %s: Imported asset not found for asset source %s (%s)', $this->getIdentifier(), $assetSource->getIdentifier(), $assetSource->getLabel()), LogEnvironment::fromMethodName(__METHOD__));
+                return null;
+            }
+        } else {
+            $importedAsset = null;
         }
 
         try {

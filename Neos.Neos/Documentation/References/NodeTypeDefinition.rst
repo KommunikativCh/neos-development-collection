@@ -144,18 +144,38 @@ The following options are allowed for defining a NodeType:
 
   ``icon``
     This setting defines the icon that the Neos UI will use to display the node type.
+    The icon can contain a custom SVG icon as a resource URI or a Fontawesome icon.
 
-    Legacy:
-    In Neos versions before 4.0 it was required to use icons from the Fontawesome 3 or 4 versions,
-    prefixed with "icon-"
+    Resource icon:
+    For custom SVG icons a resource URI to the file needs to be configured.
+    e.g. 'resource://Neos.Demo/Images/logo.svg'
 
-    Current:
-    In Neos 4.0, Fontawesome 5 was introduced, enabling the usage of all free Fontawesome icons:
+    Fontawesome icon:
+    All free Fontawesome 5 icons can be used:
     https://fontawesome.com/icons?d=gallery&m=free
-    Those can still be referenced via "icon-[name]", as the UI includes a fallback to the "fas"
+
+    Those can be referenced via "icon-[name]", as the UI includes a fallback to the "fas"
     prefix-classes. To be sure which icon will be used, they can also be referenced by their
     icon-classes, e.g. "fas fa-check".
 
+
+    ``previewIcon``
+    This setting defines the icon that will be used in the tile view of the NodeType selection dialog.
+    It is an additional icon that can be used to have more detailed icons for the node type. So that the users get a better idea of what the node type is for.
+
+    Preview icons are by default bit bigger. We scale them to the doubled size.
+    It is also possible to adjust the scaling by the previewIconSize setting.
+    It can be a Fontawesome icon name or an SVG Asset Resource URL like the icon.
+
+    ``previewIconSize``
+    The previewIconSize setting defines the size of the previewIcon. By default, the previewIcon has the size "2x".
+
+    The following options are available:
+    - 'xs'
+    - 'sm'
+    - 'lg'
+    - '2x'
+    - '3x'
 
   ``help``
     Configuration of contextual help. Displays a message that is rendered as popover
@@ -223,6 +243,27 @@ The following options are allowed for defining a NodeType:
 
       ``collapsed``
         If the group should be collapsed by default (true or false). If left empty, the group will be expanded.
+
+    ``views``
+      Defines views that can be used to display read-only data alongside property editors inside the inspector
+
+      ``label``
+        The human-readable label for this view
+
+      ``group``
+        Identifier of the *inspector group* this view is categorized into in the content editing user interface. If none is given, the view is not visibile in the property inspector of the user interface.
+
+        The value here must reference a group configured in the ``ui.inspector.groups`` element of the node type this view belongs to.
+
+      ``position``
+        Position inside the inspector group, small numbers are sorted on top.
+
+      ``view``
+        Name of the JavaScript View Class which is instantiated to edit this element in the inspector.
+
+      ``viewOptions``
+        A set of options for the given view, see the :ref:`inspector-views-reference`.
+
   ``creationDialog``
     Creation dialog elements configuration. See `Node Creation Dialog Configuration`_ for more details.
 ``properties``
@@ -267,25 +308,13 @@ The following options are allowed for defining a NodeType:
     ``inlineEditable``
       If `true`, this property is inline editable, i.e. edited directly on the page.
 
-    ``aloha``
-      Legacy configuration of rich text editor, works for the sake of backwards compatibility, but it
-      is advised to use `inline.editorOptions` instead.
-
     ``inline``
 
       ``editor``
-        A way to override default inline editor loaded for this property.
-        Two editors are available out of the box: `ckeditor` (loads CKeditor4) and `ckeditor5` (loads CKeditor5).
-        The default editor is configurable in Settings.yaml under the key `Neos.Neos.Ui.frontendConfiguration.defaultInlineEditor`.
-        It is strongly recommended to start using CKeditor5 today, as the CKeditor4 integration will be deprecated and removed in the future versions.
-        Additional custom inline editors are registered via the `inlineEditors` registry.
-        See `Extending the Content User Interface`_ for the detailed information on the topic.
+        The default inline editor is the CKEditor5.
 
       ``editorOptions``
         This section controls the text formatting options the user has available for this property.
-
-        **Note**: When using `inline.editorOptions` anything defined under the legacy `aloha` key for a
-        property is ignored. Keep this in mind when using supertypes and mixins.
 
         ``placeholder``
           A text that is shown when the field is empty. Supports i18n.
@@ -314,10 +343,8 @@ The following options are allowed for defining a NodeType:
             formatting:
               strong: true
               em: true
-              u: true
               sub: true
               sup: true
-              del: true
               p: true
               h1: true
               h2: true

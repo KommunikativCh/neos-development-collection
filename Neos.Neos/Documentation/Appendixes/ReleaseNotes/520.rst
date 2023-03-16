@@ -6,7 +6,6 @@ This is a planned feature release and includes the following new feature as well
 
 Update procedure includes updating dependencies and running `./flow doctrine:migrate` as for  most updates.
 
-================
 What has changed
 ================
 
@@ -27,7 +26,7 @@ It also provides all relevant Neos CSS variables and is about 70% smaller than t
 
 Example:
 
-.. code-block: yaml
+.. code-block:: yaml
   Neos:
     modules:
       management: # Or any other module group
@@ -64,7 +63,7 @@ FEATURE: Sortable NodeType Post processors
 ==========================================
 Allows a `position` to be specified in the NodeType `postprocessors` configuration:
 
-.. code-block: yaml
+.. code-block:: yaml
   'Some.Custom:NodeType':
     # ...
     postprocessors:
@@ -74,11 +73,11 @@ Allows a `position` to be specified in the NodeType `postprocessors` configurati
 
 FEATURE: Icons and description for asset sources
 ================================================
-Icons and descriptions can now be provided by the asset source. 
+Icons and descriptions can now be provided by the asset source.
 The icon makes the asset source easier to identify while the description can provide further information or a link to the asset source as required by some free asset source API guidelines.
 
-To make your AssetSources compatible with Neos 6.x add the methods
-* `public function getIcon(): string`
+To make your AssetSources compatible with Neos 7.x add the methods
+* `public function getIconUri(): string`
 * `public function getDescription(): string;`
 
 to your asset source.

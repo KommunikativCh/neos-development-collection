@@ -15,6 +15,7 @@ namespace Neos\Neos\Domain\Service;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Persistence\Exception\IllegalObjectTypeException;
 use Neos\Flow\Persistence\PersistenceManagerInterface;
+use Neos\Flow\Persistence\QueryInterface;
 use Neos\Flow\Persistence\QueryResultInterface;
 use Neos\Flow\Security\Account;
 use Neos\Flow\Security\AccountFactory;
@@ -29,6 +30,9 @@ use Neos\Flow\Security\Cryptography\HashService;
 use Neos\Flow\Security\Exception\NoSuchRoleException;
 use Neos\Flow\Security\Policy\PolicyService;
 use Neos\Flow\Security\Policy\Role;
+use Neos\Flow\Session\Exception\SessionNotStartedException;
+use Neos\Flow\Session\SessionInterface;
+use Neos\Flow\Session\SessionManager;
 use Neos\Flow\Utility\Now;
 use Neos\Neos\Domain\Exception;
 use Neos\Neos\Domain\Model\User;
@@ -138,6 +142,12 @@ class UserService
 
     /**
      * @Flow\Inject
+     * @var SessionManager
+     */
+    protected $sessionManager;
+
+    /**
+     * @Flow\Inject
      * @var PersistenceManagerInterface
      */
     protected $persistenceManager;
@@ -156,21 +166,25 @@ class UserService
     /**
      * Retrieves a list of all existing users
      *
+     * @param string $sortBy
+     * @param string $sortDirection
      * @return QueryResultInterface The users
      * @api
      */
-    public function getUsers(): QueryResultInterface
+    public function getUsers(string $sortBy = 'accounts.accountIdentifier', string $sortDirection = QueryInterface::ORDER_ASCENDING): QueryResultInterface
     {
-        return $this->userRepository->findAllOrderedByUsername();
+        return $this->userRepository->findAllOrdered($sortBy, $sortDirection);
     }
 
     /**
      * @param string $searchTerm
+     * @param string $sortBy
+     * @param string $sortDirection
      * @return QueryResultInterface
      */
-    public function searchUsers(string $searchTerm): QueryResultInterface
+    public function searchUsers(string $searchTerm, string $sortBy, string $sortDirection): QueryResultInterface
     {
-        return $this->userRepository->findBySearchTerm($searchTerm);
+        return $this->userRepository->findBySearchTerm($searchTerm, $sortBy, $sortDirection);
     }
 
     /**
@@ -178,7 +192,7 @@ class UserService
      *
      * @param string $username The username
      * @param string $authenticationProviderName Name of the authentication provider to use. Example: "Neos.Neos:Backend"
-     * @return User The user, or null if the user does not exist
+     * @return User|null The user, or null if the user does not exist
      * @throws Exception
      * @api
      */
@@ -236,17 +250,30 @@ class UserService
      */
     public function getCurrentUser()
     {
-        if ($this->securityContext->canBeInitialized() === true) {
-            $account = $this->securityContext->getAccount();
-            if ($account !== null) {
-                return $this->getUser(
-                    $account->getAccountIdentifier(),
-                    $account->getAuthenticationProviderName()
-                );
-            }
+        if ($this->securityContext->canBeInitialized() === false) {
+            return null;
         }
 
-        return null;
+        $tokens = $this->securityContext->getAuthenticationTokens();
+        $user = array_reduce($tokens, function ($foundUser, TokenInterface $token) {
+            if ($foundUser !== null) {
+                return $foundUser;
+            }
+
+            $account = $token->getAccount();
+            if ($account === null) {
+                return $foundUser;
+            }
+
+            $user = $this->getNeosUserForAccount($account);
+            if ($user === null) {
+                return $foundUser;
+            }
+
+            return $user;
+        }, null);
+
+        return $user;
     }
 
     /**
@@ -325,11 +352,15 @@ class UserService
      *
      * @param User $user The user to delete
      * @return void
-     * @throws Exception
+     * @throws IllegalObjectTypeException
+     * @throws SessionNotStartedException
+     * @throws \Exception
      * @api
      */
     public function deleteUser(User $user)
     {
+        $this->destroyActiveSessionsForUser($user);
+
         foreach ($user->getAccounts() as $account) {
             $this->securityContext->withoutAuthorizationChecks(function () use ($account) {
                 $this->deletePersonalWorkspace($account->getAccountIdentifier());
@@ -365,6 +396,8 @@ class UserService
      * @param User $user The user to set the password for
      * @param string $password A new password
      * @return void
+     * @throws IllegalObjectTypeException
+     * @throws SessionNotStartedException
      * @api
      */
     public function setUserPassword(User $user, $password)
@@ -375,6 +408,8 @@ class UserService
             /** @var TokenInterface $token */
             $indexedTokens[$token->getAuthenticationProviderName()] = $token;
         }
+
+        $this->destroyActiveSessionsForUser($user, true);
 
         foreach ($user->getAccounts() as $account) {
             /** @var Account $account */
@@ -591,10 +626,14 @@ class UserService
      *
      * @param User $user The user to deactivate
      * @return void
+     * @throws IllegalObjectTypeException
+     * @throws SessionNotStartedException
      * @api
      */
     public function deactivateUser(User $user)
     {
+        $this->destroyActiveSessionsForUser($user);
+
         /** @var Account $account */
         foreach ($user->getAccounts() as $account) {
             $account->setExpirationDate(
@@ -701,6 +740,16 @@ class UserService
     }
 
     /**
+     * @return bool
+     * @throws NoSuchRoleException
+     * @throws \Neos\Flow\Security\Exception
+     */
+    public function currentUserIsAdministrator(): bool
+    {
+        return $this->securityContext->hasRole('Neos.Neos:Administrator');
+    }
+
+    /**
      * Returns the default authentication provider name
      *
      * @return string
@@ -763,8 +812,9 @@ class UserService
      *
      * @param User $user The user
      * @return array
+     * @throws NoSuchRoleException
      */
-    protected function getAllRoles(User $user)
+    public function getAllRoles(User $user): array
     {
         $roles = [
             'Neos.Flow:Everybody' => $this->policyService->getRole('Neos.Flow:Everybody'),
@@ -789,6 +839,32 @@ class UserService
         }
 
         return $roles;
+    }
+
+    /**
+     * @param User $user
+     * @param bool $keepCurrentSession
+     */
+    private function destroyActiveSessionsForUser(User $user, bool $keepCurrentSession = false): void
+    {
+        $sessionToKeep = $keepCurrentSession ? $this->sessionManager->getCurrentSession() : null;
+
+        foreach ($user->getAccounts() as $account) {
+            $activeSessions = $this->sessionManager->getSessionsByTag($this->securityContext->getSessionTagForAccount($account));
+            foreach ($activeSessions as $activeSession) {
+                /** @var SessionInterface $activeSession */
+                if (!$activeSession->isStarted()) {
+                    continue;
+                }
+                if ($sessionToKeep instanceof SessionInterface
+                    && $sessionToKeep->isStarted()
+                    && $activeSession->getId() === $sessionToKeep->getId()
+                ) {
+                    continue;
+                }
+                $activeSession->destroy('Requested to remove alle sessions for user ' . $account->getAccountIdentifier());
+            }
+        }
     }
 
     /**
@@ -866,5 +942,15 @@ class UserService
         }
 
         return $user;
+    }
+
+    /**
+     * @param Account $account
+     * @return User|null
+     */
+    private function getNeosUserForAccount(Account $account): ?User
+    {
+        $user = $this->partyService->getAssignedPartyOfAccount($account);
+        return ($user instanceof User) ? $user : null;
     }
 }

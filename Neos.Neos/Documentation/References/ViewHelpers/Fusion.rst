@@ -1,9 +1,9 @@
 .. _`Fusion ViewHelper Reference`:
 
 Fusion ViewHelper Reference
-===========================
+###########################
 
-This reference was automatically generated from code on 2020-05-18
+This reference was automatically generated from code on 2023-03-09
 
 
 .. _`Fusion ViewHelper Reference: fusion:render`:
@@ -60,6 +60,7 @@ Expected result::
 Expected result::
 
 	(the evaluated Fusion, depending on the given path)
+
 
 
 

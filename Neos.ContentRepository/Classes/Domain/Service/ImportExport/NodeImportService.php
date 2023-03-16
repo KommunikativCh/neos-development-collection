@@ -431,6 +431,7 @@ class NodeImportService
                     $currentClassName = $reader->getAttribute('__classname');
                     $currentEncoding = $reader->getAttribute('__encoding');
 
+                    // handle self-closing tags
                     if ($reader->isEmptyElement) {
                         switch ($currentType) {
                             case 'array':
@@ -452,6 +453,21 @@ class NodeImportService
                     }
                     break;
                 case \XMLReader::END_ELEMENT:
+                    // handle empty tags
+                    if ($reader->name === $currentProperty && !isset($properties[$currentProperty])) {
+                        switch ($currentType) {
+                            case 'array':
+                                $properties[$currentProperty] = [];
+                                break;
+                            case 'string':
+                                $properties[$currentProperty] = '';
+                                break;
+                            default:
+                                $properties[$currentProperty] = null;
+                        }
+                        $currentType = null;
+                    }
+
                     if ($reader->name === 'properties') {
                         return $properties;
                     }
@@ -647,18 +663,20 @@ class NodeImportService
         $nodeData['properties'] = $jsonPropertiesDataTypeHandler->convertToDatabaseValue($nodeData['properties'], $connection->getDatabasePlatform());
         $nodeData['accessRoles'] = $jsonPropertiesDataTypeHandler->convertToDatabaseValue($nodeData['accessRoles'], $connection->getDatabasePlatform());
 
-        $connection->executeQuery('DELETE FROM neos_contentrepository_domain_model_nodedimension'
+        $connection->executeQuery(
+            'DELETE FROM neos_contentrepository_domain_model_nodedimension'
             . ' WHERE nodedata IN ('
             . '   SELECT persistence_object_identifier FROM neos_contentrepository_domain_model_nodedata'
             . '   WHERE identifier = :identifier'
             . '   AND workspace = :workspace'
             . '   AND dimensionshash = :dimensionsHash'
             . ' )',
-        [
-            'identifier' => $nodeData['identifier'],
-            'workspace' => $nodeData['workspace'],
-            'dimensionsHash' => $nodeData['dimensionsHash']
-        ]);
+            [
+                'identifier' => $nodeData['identifier'],
+                'workspace' => $nodeData['workspace'],
+                'dimensionsHash' => $nodeData['dimensionsHash']
+            ]
+        );
 
         /** @var \Doctrine\ORM\QueryBuilder $queryBuilder */
         $queryBuilder = $this->entityManager->createQueryBuilder();

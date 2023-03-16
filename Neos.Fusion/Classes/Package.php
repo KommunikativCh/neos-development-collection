@@ -18,6 +18,7 @@ use Neos\Flow\Monitor\FileMonitor;
 use Neos\Flow\Package\Package as BasePackage;
 use Neos\Flow\Package\PackageManager;
 use Neos\Fusion\Core\Cache\FileMonitorListener;
+use Neos\Fusion\Core\Cache\ParserCacheFlusher;
 
 /**
  * The Neos Fusion Package
@@ -47,7 +48,8 @@ class Package extends BasePackage
                         }
 
                         $fusionPaths = [
-                            $package->getResourcesPath() . 'Private/Fusion'
+                            $package->getResourcesPath() . 'Private/Fusion',
+                            $package->getPackagePath() . 'NodeTypes'
                         ];
                         foreach ($fusionPaths as $fusionPath) {
                             if (is_dir($fusionPath)) {
@@ -64,6 +66,8 @@ class Package extends BasePackage
                     $cacheManager = $bootstrap->getEarlyInstance(CacheManager::class);
                     $listener = new FileMonitorListener($cacheManager);
                     $dispatcher->connect(FileMonitor::class, 'filesHaveChanged', $listener, 'flushContentCacheOnFileChanges');
+                    $parsePartialCacheFlusher = new ParserCacheFlusher($cacheManager);
+                    $dispatcher->connect(FileMonitor::class, 'filesHaveChanged', $parsePartialCacheFlusher, 'flushPartialCacheOnFileChanges');
                 }
             });
         }

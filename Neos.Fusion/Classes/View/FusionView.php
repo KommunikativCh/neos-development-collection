@@ -14,7 +14,8 @@ namespace Neos\Fusion\View;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Mvc\ActionRequest;
 use Neos\Flow\Mvc\View\AbstractView;
-use Neos\Utility\Files;
+use Neos\Fusion\Core\FusionSourceCode;
+use Neos\Fusion\Core\FusionSourceCodeCollection;
 use Neos\Fusion\Core\Parser;
 use Neos\Fusion\Core\Runtime;
 use Neos\Fusion\Core\RuntimeFactory;
@@ -184,18 +185,35 @@ class FusionView extends AbstractView
      */
     protected function getMergedFusionObjectTree(): array
     {
-        $parsedFusion = [];
-        $fusionPathPatterns = $this->getOption('fusionPathPatterns');
+        $fusionCodeCollection = [];
+        $fusionPathPatterns = $this->getFusionPathPatterns();
         foreach ($fusionPathPatterns as $fusionPathPattern) {
-            $fusionPathPattern = str_replace('@package', $this->getPackageKey(), $fusionPathPattern);
             if (is_dir($fusionPathPattern)) {
                 $fusionPathPattern .= '/Root.fusion';
             }
             if (file_exists($fusionPathPattern)) {
-                $parsedFusion = $this->fusionParser->parse(file_get_contents($fusionPathPattern), $fusionPathPattern, $parsedFusion);
+                $fusionCodeCollection[] = FusionSourceCode::fromFilePath($fusionPathPattern);
             }
         }
-        return $parsedFusion;
+        return $this->fusionParser->parseFromSource(new FusionSourceCodeCollection(...$fusionCodeCollection))->toArray();
+    }
+
+    /**
+     * Get the currently configured fusion path patterns
+     * `@package` is replaced by the current package key
+     *
+     * @return array
+     */
+    public function getFusionPathPatterns(): array
+    {
+        $packageKey = $this->getPackageKey();
+        $fusionPathPatterns = array_map(
+            function ($fusionPathPattern) use ($packageKey) {
+                return str_replace('@package', $packageKey, $fusionPathPattern);
+            },
+            $this->getOption('fusionPathPatterns')
+        );
+        return $fusionPathPatterns;
     }
 
     /**

@@ -15,7 +15,7 @@ namespace Neos\Fusion\FusionObjects;
 /**
  * A Fusion UriBuilder object
  *
- * The following TS properties are evaluated:
+ * The following Fusion properties are evaluated:
  *  * package
  *  * subpackage
  *  * controller
@@ -29,6 +29,8 @@ namespace Neos\Fusion\FusionObjects;
  *  * absolute
  *
  * See respective getters for descriptions
+ *
+ * @deprecated in favor of ActionUriImplementation
  */
 class UriBuilderImplementation extends AbstractFusionObject
 {

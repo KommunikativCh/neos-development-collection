@@ -21,6 +21,11 @@ Neos:
       # - in Production context
       enableObjectTreeCache: false
 
+      # If set to true, content cache flushes will be done on a per-tag basis and generate additional log output
+      # which allows understanding why flushed entries were flushed. This is useful for debugging but will
+      # hurt performance and should not be used in production.
+      contentCacheDebugMode: false
+
       # Packages can now register with this setting to get their Fusion in the path:
       # resources://MyVendor.MyPackageKey/Private/Fusion/Root.fusion
       # included automatically.
@@ -66,24 +71,6 @@ Neos:
           collapsed: true
 
     userInterface:
-      # Sets the route after login. There will be one argument "node" set with the lastVisited or site node (and correct context)
-      # The below configuration sets this to the "old" UI route.
-      routeAfterLogin:
-        values:
-          '@package': 'Neos.Neos'
-          '@controller': 'Frontend\Node'
-          '@action': 'show'
-          '@format': 'html'
-
-      # should minified JavaScript be loaded? For developing the Neos
-      # Content Module, this should be set to false.
-      loadMinifiedJavascript: true
-
-      # The number of seconds to wait before giving up on loading a script.
-      # The default in requireJs is 7 seconds but on slow clients with slow internetconnections
-      # in combination with big Document Nodes it can happen that the inspector and inline Editors
-      # can not be loaded. http://requirejs.org/docs/api.html#config-waitSeconds
-      requireJsWaitSeconds: 30
 
       # Switch on to see all translated labels getting scrambled. You now can localize
       # everything that is still readable.
@@ -298,7 +285,8 @@ Neos:
           position: 100
 
       backendLoginForm:
-        backgroundImage: 'resource://Neos.Neos/Public/Images/Login/Wallpaper.jpg'
+        backgroundImage: 'resource://Neos.Neos/Public/Images/Login/Wallpaper.webp'
+        logoImage: 'resource://Neos.Neos/Public/Images/Login/Logo.svg'
         stylesheets:
           'Neos.Neos:DefaultStyles': 'resource://Neos.Neos/Public/Styles/Login.css'
 
@@ -306,9 +294,18 @@ Neos:
       widgetTemplatePathAndFileName: 'resource://Neos.Neos/Private/Templates/Module/Widget.html'
       # This stylesheet can be overriden in the configuration of a submodule to reference a reduced stylesheet.
       # Use `Main` for backwards compatibility
-      # Use `Lite` for a reduced variant with a less aggressive reset and other non essential styles removed.
+      # Use `Lite` for a reduced variant with a less aggressive reset and other non-essential styles removed.
       # Use `Minimal` when your module provides its own styles and Neos only needs to show the top and bottom bar.
       mainStylesheet: 'Main'
+
+      # Define additional stylesheets and javascript for all backend modules
+      additionalResources:
+        styleSheets: {}
+        javaScripts:
+          'Neos.Neos': 'resource://Neos.Neos/Public/JavaScript/Main.min.js'
+
+      preferredStartModules: [ 'content','user/usersettings' ]
+
     modules:
       management:
         label: 'Neos.Neos:Modules:management.label'
@@ -378,6 +375,8 @@ Neos:
         label: 'Neos.Neos:Modules:user.label'
         controller: \Neos\Neos\Controller\Module\UserController
         hideInMenu: true
+        description: 'Neos.Neos:Modules:user.description'
+        icon: fas fa-users
         mainStylesheet: 'Lite'
         submodules:
           usersettings:
@@ -413,11 +412,6 @@ Neos:
         ö: oe
         ü: ue
 
-    Ui:
-      frontendConfiguration:
-        legacy:
-          enableUiSwitch: true
-
   Flow:
     aop:
       globalObjects:
@@ -427,12 +421,21 @@ Neos:
       applicationPackageKey: Neos.Neos
       applicationName: Neos
 
+    http:
+      middlewares:
+        'requestUriHostParameter':
+          position: 'before routing'
+          middleware: 'Neos\Neos\Routing\RequestUriHostMiddleware'
+
     mvc:
       routes:
         'Neos.Neos':
           variables:
             # Set this to an empty string if you prefer URLs without the ".html" suffix
             'defaultUriSuffix': '.html'
+        # Move Neos.Media routes before default Neos routes so that they have priority
+        'Neos.Media':
+          position: 'before Neos.Neos'
 
     security:
       authentication:
@@ -464,12 +467,6 @@ Neos:
     persistence:
       doctrine:
         eventListeners:
-          Neos\Neos\Domain\EventListener\AccountPostEventListener:
-            events:
-              - postPersist
-              - postUpdate
-              - postRemove
-            listener: Neos\Neos\Domain\EventListener\AccountPostEventListener
           Neos\Neos\EventLog\Integrations\EntityIntegrationService:
             events:
               - onFlush
@@ -489,15 +486,18 @@ Neos:
               - 410
             options:
               viewClassName: \Neos\Neos\View\FusionExceptionView
+              viewOptions:
+                templatePathAndFilename: ~
           databaseConnectionExceptions:
             matchingExceptionClassNames:
               - Neos\Flow\Persistence\Doctrine\Exception\DatabaseException
               - Neos\Flow\Persistence\Doctrine\Exception\DatabaseConnectionException
               - Neos\Flow\Persistence\Doctrine\Exception\DatabaseStructureException
             options: &welcomeTemplate
-              templatePathAndFilename: 'resource://Neos.Neos/Private/Templates/Error/Welcome.html'
-              layoutRootPath: 'resource://Neos.Neos/Private/Layouts/'
-              format: html
+              viewClassName: Neos\FluidAdaptor\View\StandaloneView
+              viewOptions:
+                templatePathAndFilename: 'resource://Neos.Neos/Private/Templates/Error/Welcome.html'
+                layoutRootPaths: ['resource://Neos.Neos/Private/Layouts/']
           noHomepageException:
             matchingExceptionClassNames:
               - Neos\Neos\Routing\Exception\NoHomepageException
@@ -547,6 +547,11 @@ Neos:
     #        values: ['de_DE', 'de_ZZ', 'mul_ZZ']
     #        uriSegment: 'de'
 
+    labelGenerator:
+      eel:
+        defaultContext:
+          Neos.Node: Neos\Neos\Fusion\Helper\NodeHelper
+
   Fusion:
     rendering:
       exceptionHandler: Neos\Fusion\Core\ExceptionHandlers\ThrowingHandler
@@ -556,6 +561,7 @@ Neos:
       Neos.Array: Neos\Neos\Fusion\Helper\ArrayHelper
       Neos.Rendering: Neos\Neos\Fusion\Helper\RenderingHelper
       Neos.Caching: Neos\Neos\Fusion\Helper\CachingHelper
+      Neos.Backend: Neos\Neos\Fusion\Helper\BackendHelper
 
   # DocTools is a tool used by Neos Developers to help with a variety of documentation tasks.
   # These settings are only used in generating Documentation.
@@ -563,42 +569,43 @@ Neos:
     collections:
       Neos:
         commandReferences:
-          - 'Neos:NeosCommands'
+          'Neos:NeosCommands': true
         references:
-          - 'TYPO3Fluid:ViewHelpers'
-          - 'Neos:FluidAdaptorViewHelpers'
-          - 'Neos:MediaViewHelpers'
-          - 'Neos:FormViewHelpers'
-          - 'Neos:NeosViewHelpers'
-          - 'Neos:ContentRepositoryViewHelpers'
-          - 'Neos:FusionViewHelpers'
-          - 'Neos:FlowValidators'
-          - 'Neos:PartyValidators'
-          - 'Neos:MediaValidators'
-          - 'Neos:FlowSignals'
-          - 'Neos:NeosSignals'
-          - 'Neos:MediaSignals'
-          - 'Neos:ContentRepositorySignals'
-          - 'Neos:FlowQueryOperations'
-          - 'Neos:EelHelpers'
+          'TYPO3Fluid:ViewHelpers': true
+          'Neos:FluidAdaptorViewHelpers': true
+          'Neos:MediaViewHelpers': true
+          'Neos:FormViewHelpers': true
+          'Neos:NeosViewHelpers': true
+          'Neos:ContentRepositoryViewHelpers': true
+          'Neos:FusionViewHelpers': true
+          'Neos:FlowValidators': true
+          'Neos:PartyValidators': true
+          'Neos:MediaValidators': true
+          'Neos:FlowSignals': true
+          'Neos:NeosSignals': true
+          'Neos:MediaSignals': true
+          'Neos:ContentRepositorySignals': true
+          'Neos:FlowQueryOperations': true
+          'Neos:EelHelpers': true
     commandReferences:
       'Neos:NeosCommands':
         title: 'Neos Command Reference'
         packageKeys:
-          - Neos.Flow
-          - Neos.Party
-          - Neos.FluidAdaptor
-          - Neos.Kickstarter
-          - Neos.Welcome
-          - Neos.Media
-          - Neos.ContentRepository
-          - Neos.SiteKickstarter
-          - Neos.Neos
+          'Neos.Flow': true
+          'Neos.Party': true
+          'Neos.FluidAdaptor': true
+          'Neos.Kickstarter': true
+          'Neos.Welcome': true
+          'Neos.Media': true
+          'Neos.ContentRepository': true
+          'Neos.SiteKickstarter': true
+          'Neos.Neos': true
         savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/CommandReference.rst'
     references:
       'TYPO3Fluid:ViewHelpers':
         title: 'TYPO3 Fluid ViewHelper Reference'
         savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/ViewHelpers/TYPO3Fluid.rst'
+        templatePathAndFilename: 'resource://Neos.DocTools/Private/Templates/ViewHelperReferenceTemplate.txt'
         affectedClasses:
           parentClassName: TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper
           classNamePattern: '/^TYPO3Fluid\\Fluid\\ViewHelpers\\.*$/i'
@@ -610,6 +617,7 @@ Neos:
       'Neos:FluidAdaptorViewHelpers':
         title: 'FluidAdaptor ViewHelper Reference'
         savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/ViewHelpers/FluidAdaptor.rst'
+        templatePathAndFilename: 'resource://Neos.DocTools/Private/Templates/ViewHelperReferenceTemplate.txt'
         affectedClasses:
           parentClassName: Neos\FluidAdaptor\Core\ViewHelper\AbstractViewHelper
           classNamePattern: '/^Neos\\FluidAdaptor\\ViewHelpers\\.*$/i'
@@ -621,6 +629,7 @@ Neos:
       'Neos:MediaViewHelpers':
         title: 'Media ViewHelper Reference'
         savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/ViewHelpers/Media.rst'
+        templatePathAndFilename: 'resource://Neos.DocTools/Private/Templates/ViewHelperReferenceTemplate.txt'
         affectedClasses:
           parentClassName: Neos\FluidAdaptor\Core\ViewHelper\AbstractViewHelper
           classNamePattern: '/^Neos\\Media\\ViewHelpers\\.*$/i'
@@ -632,6 +641,7 @@ Neos:
       'Neos:FormViewHelpers':
         title: 'Form ViewHelper Reference'
         savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/ViewHelpers/Form.rst'
+        templatePathAndFilename: 'resource://Neos.DocTools/Private/Templates/ViewHelperReferenceTemplate.txt'
         affectedClasses:
           parentClassName: Neos\FluidAdaptor\Core\ViewHelper\AbstractViewHelper
           classNamePattern: '/^Neos\\Form\\ViewHelpers\\.*$/i'
@@ -643,6 +653,7 @@ Neos:
       'Neos:NeosViewHelpers':
         title: 'Neos ViewHelper Reference'
         savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/ViewHelpers/Neos.rst'
+        templatePathAndFilename: 'resource://Neos.DocTools/Private/Templates/ViewHelperReferenceTemplate.txt'
         affectedClasses:
           parentClassName: Neos\FluidAdaptor\Core\ViewHelper\AbstractViewHelper
           classNamePattern: '/^Neos\\Neos\\ViewHelpers\\.*$/i'
@@ -655,6 +666,7 @@ Neos:
       'Neos:ContentRepositoryViewHelpers':
         title: 'Content Repository ViewHelper Reference'
         savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/ViewHelpers/ContentRepository.rst'
+        templatePathAndFilename: 'resource://Neos.DocTools/Private/Templates/ViewHelperReferenceTemplate.txt'
         affectedClasses:
           parentClassName: Neos\FluidAdaptor\Core\ViewHelper\AbstractViewHelper
           classNamePattern: '/^Neos\\ContentRepository\\ViewHelpers\\.*$/i'
@@ -667,6 +679,7 @@ Neos:
       'Neos:FusionViewHelpers':
         title: 'Fusion ViewHelper Reference'
         savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/ViewHelpers/Fusion.rst'
+        templatePathAndFilename: 'resource://Neos.DocTools/Private/Templates/ViewHelperReferenceTemplate.txt'
         affectedClasses:
           parentClassName: Neos\FluidAdaptor\Core\ViewHelper\AbstractViewHelper
           classNamePattern: '/^Neos\\Fusion\\ViewHelpers\\.*$/i'

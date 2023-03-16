@@ -4,17 +4,17 @@
  *  This fixture serves for testing the processors syntax
  *
  */
-newObject1 = Text
+newObject1 = Neos.Fusion:Text
 newObject1.value.@process.1 = ${value + ' world'}
 newObject1.value = 'Hello'
 newObject1.value.@process.other = ${value + ' world'}
 newObject1.value.@process.default {
-	expression = ${value + ' world'}
-	@position = 'start'
+  expression = ${value + ' world'}
+  @position = 'start'
 }
 
-newObject2 = Text
+newObject2 = Neos.Fusion:Text
 newObject2.value = 'Hello'
 newObject2.@process.1 = ${value + ' world'}
 
-prototype(Foo).@process.1 = ${value + ' world'}
+prototype(Neos.Fusion:Foo).@process.1 = ${value + ' world'}

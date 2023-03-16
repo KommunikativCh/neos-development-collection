@@ -38,12 +38,12 @@ use Neos\Media\Domain\Model\AssetSource\AssetNotFoundExceptionInterface;
 use Neos\Media\Domain\Model\AssetSource\AssetProxyRepositoryInterface;
 use Neos\Media\Domain\Model\AssetSource\AssetSourceConnectionExceptionInterface;
 use Neos\Media\Domain\Model\AssetSource\AssetSourceInterface;
-use Neos\Media\Domain\Model\AssetSource\AssetTypeFilter;
 use Neos\Media\Domain\Model\AssetSource\Neos\NeosAssetProxy;
 use Neos\Media\Domain\Model\AssetSource\SupportsCollectionsInterface;
 use Neos\Media\Domain\Model\AssetSource\SupportsSortingInterface;
 use Neos\Media\Domain\Model\AssetSource\SupportsTaggingInterface;
 use Neos\Media\Domain\Model\AssetVariantInterface;
+use Neos\Media\Domain\Model\Dto\AssetConstraints;
 use Neos\Media\Domain\Model\Tag;
 use Neos\Media\Domain\Model\VariantSupportInterface;
 use Neos\Media\Domain\Repository\AssetCollectionRepository;
@@ -69,7 +69,7 @@ class AssetController extends ActionController
 {
     use CreateContentContextTrait;
     use BackendUserTranslationTrait;
-    use AddFlashMessageTrait;
+    use AddTranslatedFlashMessageTrait;
 
     protected const TAG_GIVEN = 0;
     protected const TAG_ALL = 1;
@@ -152,6 +152,11 @@ class AssetController extends ActionController
     protected $imageProfilesConfiguration;
 
     /**
+     * @var AssetConstraints
+     */
+    private $assetConstraints;
+
+    /**
      * @return void
      */
     public function initializeObject(): void
@@ -168,6 +173,21 @@ class AssetController extends ActionController
     }
 
     /**
+     * @throws NoSuchArgumentException
+     */
+    protected function initializeAction(): void
+    {
+        parent::initializeAction();
+
+        if ($this->request->hasArgument('constraints')) {
+            $this->assetConstraints = AssetConstraints::fromArray($this->request->getArgument('constraints'));
+        } else {
+            $this->assetConstraints = AssetConstraints::create();
+        }
+        $this->assetSources = $this->assetConstraints->applyToAssetSources($this->assetSources);
+    }
+
+    /**
      * Set common variables on the view
      *
      * @param ViewInterface $view
@@ -179,11 +199,13 @@ class AssetController extends ActionController
             'view' => $this->browserState->get('view'),
             'sortBy' => $this->browserState->get('sortBy'),
             'sortDirection' => $this->browserState->get('sortDirection'),
-            'filter' => $this->browserState->get('filter'),
+            'filter' => (string)$this->assetConstraints->applyToAssetTypeFilter($this->browserState->get('filter')),
+            'filterOptions' => $this->assetConstraints->getAllowedAssetTypeFilterOptions(),
             'activeTag' => $this->browserState->get('activeTag'),
             'activeAssetCollection' => $this->browserState->get('activeAssetCollection'),
             'assetSources' => $this->assetSources,
-            'variantsTabFeatureEnabled' => $this->settings['features']['variantsTab']['enable']
+            'variantsTabFeatureEnabled' => $this->settings['features']['variantsTab']['enable'],
+            'constraints' => $this->assetConstraints,
         ]);
     }
 
@@ -205,6 +227,8 @@ class AssetController extends ActionController
      */
     public function indexAction($view = null, $sortBy = null, $sortDirection = null, $filter = null, $tagMode = self::TAG_GIVEN, Tag $tag = null, $searchTerm = null, $collectionMode = self::COLLECTION_GIVEN, AssetCollection $assetCollection = null, $assetSourceIdentifier = null): void
     {
+        $assetSourceIdentifier = $this->assetConstraints->applyToAssetSourceIdentifiers($assetSourceIdentifier);
+
         // First, apply all options given to indexAction() and save them in the BrowserState object.
         // Note that the order of these apply*() method calls plays a role, because they may depend on previous results:
         $this->applyActiveAssetSourceToBrowserState($assetSourceIdentifier);
@@ -239,10 +263,11 @@ class AssetController extends ActionController
 
             foreach ($activeAssetCollection !== null ? $activeAssetCollection->getTags() : $this->tagRepository->findAll() as $retrievedTag) {
                 assert($retrievedTag instanceof Tag);
-                $tags[] = ['object' => $retrievedTag, 'count' => $this->assetRepository->countByTag($retrievedTag, $activeAssetCollection)];
+                $tagCount = ($assetProxyRepository instanceof SupportsTaggingInterface ? $assetProxyRepository->countByTag($retrievedTag) : $this->assetRepository->countByTag($retrievedTag, $activeAssetCollection));
+                $tags[] = ['object' => $retrievedTag, 'count' => $tagCount];
             }
 
-            if ($searchTerm !== null) {
+            if (trim($searchTerm) !== '') {
                 $assetProxies = $assetProxyRepository->findBySearchTerm($searchTerm);
                 $this->view->assign('searchTerm', $searchTerm);
             } elseif ($this->browserState->get('tagMode') === self::TAG_NONE) {
@@ -436,7 +461,8 @@ class AssetController extends ActionController
                 'imageProfiles' => $this->imageProfilesConfiguration,
                 'overviewAction' => $overviewAction,
                 'originalInformation' => (new ImageMapper($asset))->getMappingResult(),
-                'variantsInformation' => $variantInformation
+                'variantsInformation' => $variantInformation,
+                'isSubRequest' => !$this->request->isMainRequest()
             ]);
         } catch (AssetNotFoundExceptionInterface | AssetSourceConnectionExceptionInterface $e) {
             $this->view->assign('connectionError', $e);
@@ -465,8 +491,8 @@ class AssetController extends ActionController
     public function updateAction(Asset $asset): void
     {
         $this->assetRepository->update($asset);
-        $this->addFlashMessage('assetHasBeenUpdated', '', Message::SEVERITY_OK, [htmlspecialchars($asset->getLabel())]);
-        $this->redirect('index');
+        $this->addTranslatedFlashMessage('assetHasBeenUpdated', Message::SEVERITY_OK, [htmlspecialchars($asset->getLabel())]);
+        $this->redirectToIndex();
     }
 
     /**
@@ -496,8 +522,8 @@ class AssetController extends ActionController
         if ($this->persistenceManager->isNewObject($asset)) {
             $this->assetRepository->add($asset);
         }
-        $this->addFlashMessage('assetHasBeenAdded', '', Message::SEVERITY_OK, [htmlspecialchars($asset->getLabel())]);
-        $this->redirect('index');
+        $this->addTranslatedFlashMessage('assetHasBeenAdded', Message::SEVERITY_OK, [htmlspecialchars($asset->getLabel())]);
+        $this->redirectToIndex();
     }
 
     /**
@@ -537,7 +563,7 @@ class AssetController extends ActionController
             $this->assetCollectionRepository->update($assetCollection);
         }
 
-        $this->addFlashMessage('assetHasBeenAdded', '', Message::SEVERITY_OK, [htmlspecialchars($asset->getLabel())]);
+        $this->addTranslatedFlashMessage('assetHasBeenAdded', Message::SEVERITY_OK, [htmlspecialchars($asset->getLabel())]);
         $this->response->setStatusCode(201);
         return '';
     }
@@ -593,13 +619,18 @@ class AssetController extends ActionController
     {
         $usageReferences = $this->assetService->getUsageReferences($asset);
         if (count($usageReferences) > 0) {
-            $this->addFlashMessage('deleteRelatedNodes', '', Message::SEVERITY_WARNING, [], 1412422767);
-            $this->redirect('index');
+            $this->addTranslatedFlashMessage('deleteRelatedNodes', Message::SEVERITY_WARNING, [], 1412422767);
+            $this->redirectToIndex();
         }
 
         $this->assetRepository->remove($asset);
-        $this->addFlashMessage('assetHasBeenDeleted', '', Message::SEVERITY_OK, [$asset->getLabel()], 1412375050);
-        $this->redirect('index');
+        $this->addTranslatedFlashMessage(
+            'assetHasBeenDeleted',
+            Message::SEVERITY_OK,
+            [htmlspecialchars($asset->getLabel())],
+            1412375050
+        );
+        $this->redirectToIndex();
     }
 
     /**
@@ -619,27 +650,26 @@ class AssetController extends ActionController
 
         // Prevent replacement of image, audio and video by a different mimetype because of possible rendering issues.
         if ($sourceMediaType['type'] !== $replacementMediaType['type'] && in_array($sourceMediaType['type'], ['image', 'audio', 'video'])) {
-            $this->addFlashMessage(
+            $this->addTranslatedFlashMessage(
                 'resourceCanOnlyBeReplacedBySimilarResource',
-                '',
                 Message::SEVERITY_WARNING,
                 [$sourceMediaType['type'], $resource->getMediaType()],
                 1462308179
             );
-            $this->redirect('index');
+            $this->redirectToIndex();
         }
 
         try {
             $this->assetService->replaceAssetResource($asset, $resource, $options);
         } catch (\Exception $exception) {
-            $this->addFlashMessage('couldNotReplaceAsset', '', Message::SEVERITY_OK, [], 1463472606);
+            $this->addTranslatedFlashMessage('couldNotReplaceAsset', Message::SEVERITY_OK, [], 1463472606);
             $this->forwardToReferringRequest();
             return;
         }
 
         $assetLabel = (method_exists($asset, 'getLabel') ? $asset->getLabel() : $resource->getFilename());
-        $this->addFlashMessage('assetHasBeenReplaced', '', Message::SEVERITY_OK, [htmlspecialchars($assetLabel)]);
-        $this->redirect('index');
+        $this->addTranslatedFlashMessage('assetHasBeenReplaced', Message::SEVERITY_OK, [htmlspecialchars($assetLabel)]);
+        $this->redirectToIndex();
     }
 
     /**
@@ -651,7 +681,7 @@ class AssetController extends ActionController
      */
     public function relatedNodesAction(AssetInterface $asset): void
     {
-        $this->forward('relatedNodes', 'Usage', 'Neos.Media.Browser', ['asset' => $asset]);
+        $this->forwardWithConstraints('relatedNodes', 'Usage', ['asset' => $asset]);
     }
 
     /**
@@ -663,7 +693,7 @@ class AssetController extends ActionController
      */
     public function createTagAction(string $label): void
     {
-        $this->forward('create', 'Tag', 'Neos.Media.Browser', ['label' => $label]);
+        $this->forwardWithConstraints('create', 'Tag', ['label' => $label]);
     }
 
     /**
@@ -673,7 +703,7 @@ class AssetController extends ActionController
      */
     public function editTagAction(Tag $tag): void
     {
-        $this->forward('edit', 'Tag', 'Neos.Media.Browser', ['tag' => $tag]);
+        $this->forwardWithConstraints('edit', 'Tag', ['tag' => $tag]);
     }
 
     /**
@@ -683,7 +713,7 @@ class AssetController extends ActionController
      */
     public function updateTagAction(Tag $tag): void
     {
-        $this->forward('update', 'Tag', 'Neos.Media.Browser', ['tag' => $tag]);
+        $this->forwardWithConstraints('update', 'Tag', ['tag' => $tag]);
     }
 
     /**
@@ -693,7 +723,7 @@ class AssetController extends ActionController
      */
     public function deleteTagAction(Tag $tag): void
     {
-        $this->forward('delete', 'Tag', 'Neos.Media.Browser', ['tag' => $tag]);
+        $this->forwardWithConstraints('delete', 'Tag', ['tag' => $tag]);
     }
 
     /**
@@ -705,7 +735,7 @@ class AssetController extends ActionController
      */
     public function createAssetCollectionAction($title): void
     {
-        $this->forward('create', 'AssetCollection', 'Neos.Media.Browser', ['title' => $title]);
+        $this->forwardWithConstraints('create', 'AssetCollection', ['title' => $title]);
     }
 
     /**
@@ -715,7 +745,7 @@ class AssetController extends ActionController
      */
     public function editAssetCollectionAction(AssetCollection $assetCollection): void
     {
-        $this->forward('edit', 'AssetCollection', 'Neos.Media.Browser', ['assetCollection' => $assetCollection]);
+        $this->forwardWithConstraints('edit', 'AssetCollection', ['assetCollection' => $assetCollection]);
     }
 
     /**
@@ -725,7 +755,7 @@ class AssetController extends ActionController
      */
     public function updateAssetCollectionAction(AssetCollection $assetCollection): void
     {
-        $this->forward('update', 'AssetCollection', 'Neos.Media.Browser', ['assetCollection' => $assetCollection]);
+        $this->forwardWithConstraints('update', 'AssetCollection', ['assetCollection' => $assetCollection]);
     }
 
     /**
@@ -735,7 +765,7 @@ class AssetController extends ActionController
      */
     public function deleteAssetCollectionAction(AssetCollection $assetCollection): void
     {
-        $this->forward('delete', 'AssetCollection', 'Neos.Media.Browser', ['assetCollection' => $assetCollection]);
+        $this->forwardWithConstraints('delete', 'AssetCollection', ['assetCollection' => $assetCollection]);
     }
 
     /**
@@ -804,9 +834,10 @@ class AssetController extends ActionController
             $this->browserState->set('filter', $filter);
         }
 
-        foreach (['view', 'sortBy', 'sortDirection', 'filter'] as $optionName) {
+        foreach (['view', 'sortBy', 'sortDirection'] as $optionName) {
             $this->view->assign($optionName, $this->browserState->get($optionName));
         }
+        $this->view->assign('filter', (string)$this->assetConstraints->applyToAssetTypeFilter($this->browserState->get('filter')));
     }
 
     /**
@@ -918,7 +949,7 @@ class AssetController extends ActionController
      */
     private function applyAssetTypeFilterFromBrowserState(AssetProxyRepositoryInterface $assetProxyRepository): void
     {
-        $assetProxyRepository->filterByType(new AssetTypeFilter($this->browserState->get('filter')));
+        $assetProxyRepository->filterByType($this->assetConstraints->applyToAssetTypeFilter($this->browserState->get('filter')));
     }
 
     /**
@@ -929,5 +960,35 @@ class AssetController extends ActionController
         if ($assetProxyRepository instanceof SupportsCollectionsInterface) {
             $assetProxyRepository->filterByCollection($this->getActiveAssetCollectionFromBrowserState());
         }
+    }
+
+    /**
+     * Custom redirect method that adds "constraints" arguments from the current request
+     *
+     * @param array $arguments
+     * @throws StopActionException | NoSuchArgumentException
+     */
+    private function redirectToIndex(array $arguments = []): void
+    {
+        if (!isset($arguments['constraints']) && $this->request->hasArgument('constraints')) {
+            $arguments['constraints'] = $this->request->getArgument('constraints');
+        }
+        $this->redirect('index', null, null, $arguments);
+    }
+
+    /**
+     * Custom forward method that adds "constraints" arguments from the current request
+     *
+     * @param string $actionName
+     * @param string $controllerName
+     * @param array $arguments
+     * @throws ForwardException | NoSuchArgumentException
+     */
+    private function forwardWithConstraints(string $actionName, string $controllerName, array $arguments = []): void
+    {
+        if (!isset($arguments['constraints']) && $this->request->hasArgument('constraints')) {
+            $arguments['constraints'] = $this->request->getArgument('constraints');
+        }
+        $this->forward($actionName, $controllerName, null, $arguments);
     }
 }

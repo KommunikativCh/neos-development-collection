@@ -64,11 +64,28 @@ class SiteRepository extends Repository
     /**
      * Find first site with status "online"
      *
-     * @return Site
+     * @return ?Site
      */
     public function findFirstOnline()
     {
         return $this->findOnline()->getFirst();
+    }
+
+
+    /**
+     * @param string $nodeName
+     * @return Site|null
+     */
+    public function findOneByNodeName(string $nodeName): ?Site
+    {
+        $query = $this->createQuery();
+        /** @var Site|null $site */
+        $site = $query->matching(
+            $query->equals('nodeName', $nodeName)
+        )
+            ->execute()
+            ->getFirst();
+        return $site;
     }
 
     /**

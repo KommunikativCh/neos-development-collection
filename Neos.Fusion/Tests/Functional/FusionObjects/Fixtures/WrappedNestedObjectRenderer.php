@@ -11,11 +11,10 @@ namespace Neos\Fusion\Tests\Functional\FusionObjects\Fixtures;
  * source code.
  */
 
-use Neos\Flow\Annotations as Flow;
 use Neos\Fusion\FusionObjects\AbstractArrayFusionObject;
 
 /**
- * Renderer which wraps the nested TS object found at "value" with "prepend" and "append".
+ * Renderer which wraps the nested Fusion object found at "value" with "prepend" and "append".
  *
  * Needed for more complex prototype inheritance chain testing.
  */

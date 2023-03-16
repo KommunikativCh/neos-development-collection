@@ -1,6 +1,6 @@
 #neos-top-bar {
   position: fixed;
-  display: none;
+  display: flex;
   -webkit-flex-flow: row wrap;
   justify-content: space-between;
   left: 0;
@@ -57,7 +57,7 @@
     }
 
     .neos-dropdown-menu {
-      @import '../Shared/Checkboxes';
+      @import "../Shared/Checkboxes";
       border: 0;
       right: 0;
       background: none;
@@ -79,6 +79,7 @@
           line-height: $unit;
           padding: 0 $defaultMargin;
           box-sizing: border-box;
+          border: 0;
 
           &:hover {
             background: $blue;
@@ -106,6 +107,14 @@
 
       label {
         font-size: $generalFontSize;
+      }
+    }
+
+    .neos-user-menu {
+      &.neos-dropdown-open {
+        .neos-dropdown-menu {
+          display: block;
+        }
       }
     }
   }

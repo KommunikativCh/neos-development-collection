@@ -7,7 +7,7 @@
 	<link
 		rel="stylesheet"
 		type="text/css"
-		href="{f:uri.resource(package: 'Neos.Neos', path: '/Styles/{f:if(condition: moduleConfiguration.mainStylesheet, then: moduleConfiguration.mainStylesheet, else: settings.moduleConfiguration.mainStylesheet)}')}.css?bust={neos:backend.cssBuiltVersion()}"
+		href="{f:uri.resource(package: 'Neos.Neos', path: 'Styles/{f:if(condition: moduleConfiguration.mainStylesheet, then: moduleConfiguration.mainStylesheet, else: settings.moduleConfiguration.mainStylesheet)}')}.css?bust={neos:backend.cssBuiltVersion()}"
 	/>
 
 	<f:if condition="{moduleConfiguration.additionalResources.styleSheets}">
@@ -22,9 +22,16 @@
 		</f:for>
 	</f:if>
 
-	<script
-		src="{f:uri.resource(path: 'Library/jquery/jquery-2.0.3.js')}"
-	></script>
+	<f:for
+		each="{settings.moduleConfiguration.additionalResources.styleSheets}"
+		as="additionalResource"
+	>
+		<link
+			rel="stylesheet"
+			href="{f:uri.resource(path: additionalResource)}"
+		/>
+	</f:for>
+
 	<f:if condition="{moduleConfiguration.additionalResources.javaScripts}">
 		<f:for
 			each="{moduleConfiguration.additionalResources.javaScripts}"
@@ -39,10 +46,6 @@
 		{neos:backend.javascriptConfiguration()}
 	</script>
 
-	<link
-		rel="neos-vieschema"
-		href="{f:uri.action(action: 'vieSchema', controller: 'Backend\Schema', package: 'Neos.Neos', absolute: true, arguments: {version: '{neos:backend.configurationCacheVersion()}'})}"
-	/>
 	<link
 		rel="neos-xliff"
 		href="{f:uri.action(action: 'xliffAsJson', arguments: {locale: '{neos:backend.interfaceLanguage()}', version: '{neos:backend.xliffCacheVersion()}'}, controller: 'Backend\Backend', package: 'Neos.Neos', absolute: true) -> f:format.raw()}"
@@ -80,6 +83,7 @@
 					</f:if>
 				</f:for>
 			</ul>
+			<f:render partial="Module/FlashMessages" />
 			<f:if condition="{moduleContents}">
 				{moduleContents -> f:format.raw()}
 			</f:if>
@@ -101,17 +105,11 @@
 				/>
 			</div>
 		</div>
-		<script
-			src="{f:uri.resource(path: 'Library/requirejs/src/require.js', package: 'Neos.Neos')}"
-		></script>
-		<script
-			src="{f:uri.resource(path: 'JavaScript/Main.min.js', package: 'Neos.Neos')}"
-		></script>
-		<script
-			src="{f:uri.resource(path: '2/js/bootstrap.min.js', package: 'Neos.Twitter.Bootstrap')}"
-		></script>
-		<script
-			src="{f:uri.resource(path: 'JavaScript/LegacyUiBootstrap-built.js', package: 'Neos.Neos')}"
-		></script>
+		<f:for
+			each="{settings.moduleConfiguration.additionalResources.javaScripts}"
+			as="additionalResource"
+		>
+			<script src="{f:uri.resource(path: additionalResource)}"></script>
+		</f:for>
 	</body>
 </f:section>

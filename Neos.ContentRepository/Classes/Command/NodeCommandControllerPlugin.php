@@ -13,7 +13,7 @@ namespace Neos\ContentRepository\Command;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityNotFoundException;
-use Doctrine\ORM\Proxy\Proxy;
+use Doctrine\Persistence\Proxy;
 use Doctrine\ORM\QueryBuilder;
 use Neos\ContentRepository\Exception\NodeConfigurationException;
 use Neos\ContentRepository\Exception\NodeException;
@@ -504,7 +504,7 @@ HELPTEXT;
                     }
 
                     $taskDescription = sprintf('Set default value for property named "<i>%s</i>" in "<i>%s</i>" (<i>%s</i>)', $propertyName, $node->getPath(), $node->getNodeType()->getName());
-                    $taskClosure = function () use ($node, $propertyName ,$defaultValue) {
+                    $taskClosure = function () use ($node, $propertyName, $defaultValue) {
                         $node->setProperty($propertyName, $defaultValue);
                     };
                     $this->dispatch(self::EVENT_TASK, $taskDescription, $taskClosure);
@@ -744,7 +744,7 @@ HELPTEXT;
                     }
                 }
                 if ($undefinedProperties !== []) {
-                    $nodesWithUndefinedPropertiesNodes[$node->getIdentifier()] = ['node' => $node, 'undefinedProperties' => $undefinedProperties];
+                    $nodesWithUndefinedPropertiesNodes[] = ['node' => $node, 'undefinedProperties' => $undefinedProperties];
                     foreach ($undefinedProperties as $undefinedProperty) {
                         $undefinedPropertiesCount++;
                         $this->dispatch(self::EVENT_NOTICE, sprintf('Found undefined property named "<i>%s</i>" in "<i>%s</i>" (<i>%s</i>)', $undefinedProperty, $node->getPath(), $node->getNodeType()->getName()));
@@ -824,7 +824,7 @@ HELPTEXT;
                         $convertedProperty = $this->propertyMapper->convert($propertyValue, $propertyType);
                         if ($convertedProperty === null) {
                             $nodesWithBrokenEntityReferences[$nodeData->getIdentifier()][$propertyName] = $nodeData;
-                            $this->dispatch(self::EVENT_NOTICE, sprintf('Broken reference in "<i>%s</i>", property "<i>%s</i>" (<i>%s</i>) referring to <i>%s</i>.', $nodeData->getPath(), $nodeData->getIdentifier(), $propertyName, $propertyType, $propertyValue));
+                            $this->dispatch(self::EVENT_NOTICE, sprintf('Broken reference in "<i>%s</i>" (%s), property "<i>%s</i>" (<i>%s</i>) referring to <i>%s</i>.', $nodeData->getPath(), $nodeData->getIdentifier(), $propertyName, $propertyType, $propertyValue));
                             $brokenReferencesCount ++;
                         }
                     }
@@ -833,7 +833,7 @@ HELPTEXT;
                             $convertedProperty->__load();
                         } /** @noinspection PhpRedundantCatchClauseInspection */ catch (EntityNotFoundException $e) {
                             $nodesWithBrokenEntityReferences[$nodeData->getIdentifier()][$propertyName] = $nodeData;
-                            $this->dispatch(self::EVENT_NOTICE, sprintf('Broken reference in "<i>%s</i>", property "<i>%s</i>" (<i>%s</i>) referring to <i>%s</i>.', $nodeData->getPath(), $nodeData->getIdentifier(), $propertyName, $propertyType, $propertyValue));
+                            $this->dispatch(self::EVENT_NOTICE, sprintf('Broken reference in "<i>%s</i>" (%s), property "<i>%s</i>" (<i>%s</i>) referring to <i>%s</i>.', $nodeData->getPath(), $nodeData->getIdentifier(), $propertyName, $propertyType, $propertyValue));
                             $brokenReferencesCount ++;
                         }
                     }
@@ -1071,7 +1071,9 @@ HELPTEXT;
         $queryBuilder = $this->entityManager->createQueryBuilder();
         $queryBuilder->select('n')
             ->from(NodeData::class, 'n')
-            ->add('where', $queryBuilder->expr()->orX(
+            ->add(
+                'where',
+                $queryBuilder->expr()->orX(
                     $queryBuilder->expr()->notIn('n.workspace', $workspaceNames),
                     $queryBuilder->expr()->isNull('n.workspace')
                 )

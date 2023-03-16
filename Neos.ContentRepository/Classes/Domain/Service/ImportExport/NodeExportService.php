@@ -12,6 +12,7 @@ namespace Neos\ContentRepository\Domain\Service\ImportExport;
  */
 
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\Proxy as DoctrineProxy;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Log\ThrowableStorageInterface;
 use Neos\Flow\Log\Utility\LogEnvironment;
@@ -229,7 +230,8 @@ class NodeExportService
         // Sort nodeDataList by path, replacing "/" with "!" (the first visible ASCII character)
         // because there may be characters like "-" in the node path
         // that would break the sorting order
-        usort($nodeDataList,
+        usort(
+            $nodeDataList,
             function ($node1, $node2) {
                 return strcmp(
                     str_replace("/", "!", $node1['path']),
@@ -370,6 +372,7 @@ class NodeExportService
      * @param array $data The data as an array, the given property name is looked up there
      * @param string $propertyName The name of the property
      * @param string $elementName an optional name to use, defaults to $propertyName
+     * @param string $declaredPropertyType
      * @return void
      */
     protected function writeConvertedElement(array &$data, $propertyName, $elementName = null, $declaredPropertyType = null)
@@ -397,7 +400,7 @@ class NodeExportService
                     if ($objectIdentifier !== null) {
                         $this->xmlWriter->writeAttribute('__identifier', $objectIdentifier);
                     }
-                    if ($propertyValue instanceof \Doctrine\ORM\Proxy\Proxy) {
+                    if ($propertyValue instanceof DoctrineProxy) {
                         $className = get_parent_class($propertyValue);
                     } else {
                         $className = get_class($propertyValue);

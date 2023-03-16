@@ -78,7 +78,7 @@ class ImageService
     /**
      * @var array<string>
      */
-    protected static $allowedFormats = ['jpg', 'jpeg', 'gif', 'png', 'wbmp', 'xbm', 'webp', 'bmp'];
+    protected static $allowedFormats = ['jpg', 'jpeg', 'gif', 'png', 'wbmp', 'xbm', 'webp', 'bmp', 'avif'];
 
     /**
      * @param array $settings
@@ -133,6 +133,9 @@ class ImageService
 
         $imagineImage = $this->imagineService->open($resourceUri);
 
+        $autorotateFilter = new \Imagine\Filter\Basic\Autorotate();
+        $autorotateFilter->apply($imagineImage);
+
         $convertCMYKToRGB = $this->getOptionsMergedWithDefaults()['convertCMYKToRGB'];
         if ($convertCMYKToRGB && $imagineImage->palette() instanceof CMYK) {
             $imagineImage->usePalette(new RGB());
@@ -169,7 +172,7 @@ class ImageService
                 $adjustmentsApplied = true;
             }
         }
-        
+
         $additionalOptions = $this->getOptionsMergedWithDefaults($additionalOptions);
 
         if ($adjustmentsApplied === true) {
@@ -232,6 +235,7 @@ class ImageService
         }
         $defaultOptions['jpeg_quality'] = $quality;
         $defaultOptions['webp_quality'] = $quality;
+        $defaultOptions['png_quality'] = $quality;
         // png_compression_level should be an integer between 0 and 9 and inverse to the quality level given. So quality 100 should result in compression 0.
         $defaultOptions['png_compression_level'] = (9 - ceil($quality * 9 / 100));
 
@@ -260,6 +264,10 @@ class ImageService
         } else {
             try {
                 $imagineImage = $this->imagineService->read($resource->getStream());
+
+                $autorotateFilter = new \Imagine\Filter\Basic\Autorotate();
+                $autorotateFilter->apply($imagineImage);
+
                 $sizeBox = $imagineImage->getSize();
                 $imageSize = ['width' => $sizeBox->getWidth(), 'height' => $sizeBox->getHeight()];
             } catch (\Exception $e) {

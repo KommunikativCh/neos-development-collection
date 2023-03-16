@@ -1,7 +1,7 @@
 <?php
 namespace Neos\Fusion\FusionObjects;
 
-use function GuzzleHttp\Psr7\str;
+use GuzzleHttp\Psr7\Message;
 use Neos\Flow\Annotations as Flow;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
@@ -9,7 +9,7 @@ use Psr\Http\Message\StreamFactoryInterface;
 /**
  *
  */
-class HttpResponseImplementation extends DataStructureImplementation
+class HttpResponseImplementation extends AbstractArrayFusionObject
 {
     /**
      * @Flow\Inject
@@ -51,14 +51,14 @@ class HttpResponseImplementation extends DataStructureImplementation
             throw new \InvalidArgumentException('Could not render HTTP response because the response head was not a valid HTTP response object.', 1557932997);
         }
 
-        $parentResult = parent::evaluate();
-        if ($parentResult !== []) {
-            $contentStream = $this->contentStreamFactory->createStream(implode('', $parentResult));
+        $resultParts = $this->evaluateNestedProperties();
+        if ($resultParts !== []) {
+            $contentStream = $this->contentStreamFactory->createStream(implode('', $resultParts));
             $response = $response->withBody($contentStream);
         }
 
         // FIXME: It would be neat to transfer the actual response object directly,
         // but the content cache currently cannot handle it, so we put it all into a string for now.
-        return str($response);
+        return Message::toString($response);
     }
 }

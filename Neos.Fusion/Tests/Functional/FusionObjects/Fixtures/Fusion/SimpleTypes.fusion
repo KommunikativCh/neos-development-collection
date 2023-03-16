@@ -1,18 +1,18 @@
 // Examples of a simple Value object
 prototype(Neos.Fusion:Value).@class = 'Neos\\Fusion\\FusionObjects\\ValueImplementation'
 
-simpleTypes.booleanTrue = Value {
-	value = true
+simpleTypes.booleanTrue = Neos.Fusion:Value {
+  value = true
 }
-simpleTypes.booleanFalse = Value {
-	value = false
+simpleTypes.booleanFalse = Neos.Fusion:Value {
+  value = false
 }
-simpleTypes.null = Value {
-	value = NULL
+simpleTypes.null = Neos.Fusion:Value {
+  value = NULL
 }
-simpleTypes.wrappedString = Value {
-	value = 'Hello, '
-	value.@process.1 = ${value + 'Foo'}
+simpleTypes.wrappedString = Neos.Fusion:Value {
+  value = 'Hello, '
+  value.@process.1 = ${value + 'Foo'}
 }
 
 
@@ -21,22 +21,22 @@ simpleTypes.wrappedString = Value {
 // (without processors. Processors are tested in Processor.fusion)
 simpleTypes.stringAsEel = ${'A simple string value is not a Fusion object'}
 simpleTypes.stringAsPlainValue = 'A simple string value is not a Fusion object'
-simpleTypes.stringAsFusion = Value {
-	value = 'A simple string value is not a Fusion object'
+simpleTypes.stringAsFusion = Neos.Fusion:Value {
+  value = 'A simple string value is not a Fusion object'
 }
 
 // with the following lines, we test that AbstractFusionObject::fusionObject works on all three
 // data types (without processors. Processors are tested in Processor.fusion)
-simpleTypes.valueWithNestedPlainValue = Value {
-	value = 'A simple value'
+simpleTypes.valueWithNestedPlainValue = Neos.Fusion:Value {
+  value = 'A simple value'
 }
-simpleTypes.valueWithNestedEel = Value {
-	value = ${'A simple value'}
+simpleTypes.valueWithNestedEel = Neos.Fusion:Value {
+  value = ${'A simple value'}
 }
-simpleTypes.valueWithNestedFusion = Value {
-	value = Value {
-		value = 'A simple value'
-	}
+simpleTypes.valueWithNestedFusion = Neos.Fusion:Value {
+  value = Neos.Fusion:Value {
+    value = 'A simple value'
+  }
 }
 
 simpleTypes.missingImplementation = Acme:Test
