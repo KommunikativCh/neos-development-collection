@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\Controller\Module;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,20 +10,22 @@ namespace Neos\Neos\Controller\Module;
  * source code.
  */
 
+declare(strict_types=1);
+
+namespace Neos\Neos\Controller\Module;
+
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Mvc\Controller\ActionController;
 use Neos\Flow\Mvc\View\ViewInterface;
 use Neos\Neos\Controller\BackendUserTranslationTrait;
 
-/**
- * @Flow\Scope("singleton")
- */
+#[Flow\Scope('singleton')]
 abstract class AbstractModuleController extends ActionController
 {
     use BackendUserTranslationTrait;
 
     /**
-     * @var array
+     * @var array<string,mixed>
      */
     protected $moduleConfiguration;
 
@@ -33,7 +34,9 @@ abstract class AbstractModuleController extends ActionController
      */
     protected function initializeAction()
     {
-        $this->moduleConfiguration = $this->request->getInternalArgument('__moduleConfiguration');
+        /** @var array<string,mixed> $moduleConfiguration */
+        $moduleConfiguration = $this->request->getInternalArgument('__moduleConfiguration');
+        $this->moduleConfiguration = $moduleConfiguration;
     }
 
     /**
@@ -65,8 +68,6 @@ abstract class AbstractModuleController extends ActionController
 
     /**
      * Display no flash message at all on errors.
-     *
-     * @return \Neos\Error\Messages\Message returns false
      */
     protected function getErrorFlashMessage()
     {

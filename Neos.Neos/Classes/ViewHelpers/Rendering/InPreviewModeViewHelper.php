@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\ViewHelpers\Rendering;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,7 +10,14 @@ namespace Neos\Neos\ViewHelpers\Rendering;
  * source code.
  */
 
-use Neos\ContentRepository\Domain\Model\NodeInterface;
+declare(strict_types=1);
+
+namespace Neos\Neos\ViewHelpers\Rendering;
+
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
+use Neos\FluidAdaptor\Core\ViewHelper\AbstractViewHelper;
+use Neos\Fusion\ViewHelpers\FusionContextTrait;
+use Neos\Neos\Domain\Model\RenderingMode;
 
 /**
  * ViewHelper to find out if Neos is rendering a preview mode.
@@ -52,8 +58,10 @@ use Neos\ContentRepository\Domain\Model\NodeInterface;
  * Shown in all other cases.
  * </output>
  */
-class InPreviewModeViewHelper extends AbstractRenderingStateViewHelper
+class InPreviewModeViewHelper extends AbstractViewHelper
 {
+    use FusionContextTrait;
+
     /**
      * Initialize the arguments.
      *
@@ -63,25 +71,23 @@ class InPreviewModeViewHelper extends AbstractRenderingStateViewHelper
     public function initializeArguments()
     {
         parent::initializeArguments();
-        $this->registerArgument('node', NodeInterface::class, 'Optional Node to use context from');
-        $this->registerArgument('mode', 'string', 'Optional rendering mode name to check if this specific mode is active');
+        $this->registerArgument(
+            'mode',
+            'string',
+            'Optional rendering mode name to check if this specific mode is active'
+        );
     }
 
-    /**
-     * @return boolean
-     * @throws \Neos\Neos\Exception
-     * @throws \Neos\FluidAdaptor\Core\ViewHelper\Exception
-     */
-    public function render(): bool
+    public function render(Node $node = null, string $mode = null): bool
     {
-        $context = $this->getNodeContext($this->arguments['node']);
-        $renderingMode = $context->getCurrentRenderingMode();
-        if ($this->arguments['mode'] !== null) {
-            $result = ($renderingMode->getName() === $this->arguments['mode']) && $renderingMode->isPreview();
-        } else {
-            $result = $renderingMode->isPreview();
+        $renderingMode = $this->getContextVariable('renderingMode');
+        if ($renderingMode instanceof RenderingMode) {
+            $mode = $this->arguments['mode'];
+            if ($mode) {
+                return $renderingMode->isPreview && $renderingMode->name === $mode;
+            }
+            return $renderingMode->isPreview;
         }
-
-        return $result;
+        return false;
     }
 }

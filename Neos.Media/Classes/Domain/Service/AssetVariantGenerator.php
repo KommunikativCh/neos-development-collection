@@ -24,9 +24,7 @@ use Neos\Media\Domain\ValueObject\Configuration\VariantPreset;
 use Neos\Media\Exception\AssetVariantGeneratorException;
 use Neos\Utility\ObjectAccess;
 
-/**
- * @Flow\Scope("singleton")
- */
+#[Flow\Scope('singleton')]
 class AssetVariantGenerator
 {
     /**
@@ -127,6 +125,11 @@ class AssetVariantGenerator
         $createdVariant = null;
         $preset = $this->getVariantPresets()[$presetIdentifier] ?? null;
         if ($preset instanceof VariantPreset && $preset->matchesMediaType($asset->getMediaType())) {
+            $existingVariant = $asset->getVariant($presetIdentifier, $variantIdentifier);
+            if ($existingVariant !== null) {
+                return $existingVariant;
+            }
+
             $variantConfiguration = $preset->variants()[$variantIdentifier] ?? null;
 
             if ($variantConfiguration instanceof Configuration\Variant) {

@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\View\Service;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,14 +10,21 @@ namespace Neos\Neos\View\Service;
  * source code.
  */
 
+declare(strict_types=1);
+
+namespace Neos\Neos\View\Service;
+
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Mvc\View\JsonView;
+use Psr\Http\Message\ResponseInterface;
 
 /**
  * A view specialised on a JSON representation of Nodes.
  *
  * This view is used by the service controllers in Neos\Neos\Controller\Service\
  *
+ * @deprecated with Neos 9, the JsonView should not be used
+ * @internal only to be used internally
  * @Flow\Scope("prototype")
  */
 class NodeJsonView extends JsonView
@@ -26,10 +32,8 @@ class NodeJsonView extends JsonView
     /**
      * Configures rendering according to the set variable(s) and calls
      * render on the parent.
-     *
-     * @return string
      */
-    public function render()
+    public function render(): ResponseInterface
     {
         if (isset($this->variables['nodes'])) {
             $this->setConfiguration(

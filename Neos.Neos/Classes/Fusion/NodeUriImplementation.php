@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\Fusion;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,12 +10,21 @@ namespace Neos\Neos\Fusion;
  * source code.
  */
 
+declare(strict_types=1);
+
+namespace Neos\Neos\Fusion;
+
+use GuzzleHttp\Psr7\ServerRequest;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
+use Neos\Flow\Mvc\ActionRequest;
+use Neos\Neos\FrontendRouting\NodeAddressFactory;
+use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
-use Neos\Flow\Log\ThrowableStorageInterface;
 use Neos\Flow\Log\Utility\LogEnvironment;
-use Neos\Neos\Service\LinkingService;
+use Neos\Flow\Mvc\Exception\NoMatchingRouteException;
+use Neos\Flow\Mvc\Routing\UriBuilder;
 use Neos\Fusion\FusionObjects\AbstractFusionObject;
-use Neos\Neos\Exception as NeosException;
+use Neos\Neos\FrontendRouting\NodeUriBuilder;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -26,42 +34,20 @@ class NodeUriImplementation extends AbstractFusionObject
 {
     /**
      * @Flow\Inject
-     * @var LinkingService
+     * @var ContentRepositoryRegistry
      */
-    protected $linkingService;
+    protected $contentRepositoryRegistry;
 
     /**
+     * @Flow\Inject
      * @var LoggerInterface
      */
-    private $logger;
-
-    /**
-     * @var ThrowableStorageInterface
-     */
-    private $throwableStorage;
-
-    /**
-     * @param LoggerInterface $logger
-     */
-    public function injectLogger(LoggerInterface $logger)
-    {
-        $this->logger = $logger;
-    }
-
-    /**
-     * @param ThrowableStorageInterface $throwableStorage
-     */
-    public function injectThrowableStorage(ThrowableStorageInterface $throwableStorage)
-    {
-        $this->throwableStorage = $throwableStorage;
-    }
+    protected $systemLogger;
 
     /**
      * A node object or a string node path or NULL to resolve the current document node
-     *
-     * @return mixed
      */
-    public function getNode()
+    public function getNode(): Node|string|null
     {
         return $this->fusionValue('node');
     }
@@ -89,9 +75,9 @@ class NodeUriImplementation extends AbstractFusionObject
     /**
      * Additional query parameters that won't be prefixed like $arguments (overrule $arguments)
      *
-     * @return array
+     * @return array<string,mixed>
      */
-    public function getAdditionalParams()
+    public function getAdditionalParams(): array
     {
         return array_merge($this->fusionValue('additionalParams'), $this->fusionValue('arguments'));
     }
@@ -99,9 +85,9 @@ class NodeUriImplementation extends AbstractFusionObject
     /**
      * Arguments to be removed from the URI. Only active if addQueryString = true
      *
-     * @return array
+     * @return array<int,string>
      */
-    public function getArgumentsToBeExcludedFromQueryString()
+    public function getArgumentsToBeExcludedFromQueryString(): array
     {
         return $this->fusionValue('argumentsToBeExcludedFromQueryString');
     }
@@ -113,7 +99,7 @@ class NodeUriImplementation extends AbstractFusionObject
      */
     public function getAddQueryString()
     {
-        return (boolean)$this->fusionValue('addQueryString');
+        return (bool)$this->fusionValue('addQueryString');
     }
 
     /**
@@ -123,7 +109,7 @@ class NodeUriImplementation extends AbstractFusionObject
      */
     public function isAbsolute()
     {
-        return (boolean)$this->fusionValue('absolute');
+        return (bool)$this->fusionValue('absolute');
     }
 
     /**
@@ -140,7 +126,7 @@ class NodeUriImplementation extends AbstractFusionObject
      * Render the Uri.
      *
      * @return string The rendered URI or NULL if no URI could be resolved for the given node
-     * @throws NeosException
+     * @throws \Neos\Flow\Mvc\Routing\Exception\MissingActionNameException
      */
     public function evaluate()
     {
@@ -150,26 +136,56 @@ class NodeUriImplementation extends AbstractFusionObject
         if (isset($currentContext[$baseNodeName])) {
             $baseNode = $currentContext[$baseNodeName];
         } else {
-            throw new NeosException(sprintf('Could not find a node instance in Fusion context with name "%s" and no node instance was given to the node argument. Set a node instance in the Fusion context or pass a node object to resolve the URI.', $baseNodeName), 1373100400);
+            throw new \RuntimeException(sprintf('Could not find a node instance in Fusion context with name "%s" and no node instance was given to the node argument. Set a node instance in the Fusion context or pass a node object to resolve the URI.', $baseNodeName), 1373100400);
         }
+        $node = $this->getNode();
+        if ($node instanceof Node) {
+            $contentRepository = $this->contentRepositoryRegistry->get(
+                $node->subgraphIdentity->contentRepositoryId
+            );
+            $nodeAddressFactory = NodeAddressFactory::create($contentRepository);
+            $nodeAddress = $nodeAddressFactory->createFromNode($node);
+        } else {
+            throw new \RuntimeException(sprintf('Passing node as %s is not supported yet.', get_debug_type($node)));
+        }
+        /* TODO implement us see https://github.com/neos/neos-development-collection/issues/4524 {@see \Neos\Neos\ViewHelpers\Uri\NodeViewHelper::resolveNodeAddressFromString} for an example implementation
+        elseif ($node === '~') {
+        $nodeAddress = $this->nodeAddressFactory->createFromNode($node);
+        $nodeAddress = $nodeAddress->withNodeAggregateId(
+        $siteNode->nodeAggregateId
+        );
+        } elseif (is_string($node) && substr($node, 0, 7) === 'node://') {
+        $nodeAddress = $this->nodeAddressFactory->createFromNode($node);
+        $nodeAddress = $nodeAddress->withNodeAggregateId(
+        NodeAggregateId::fromString(\mb_substr($node, 7))
+        );*/
+
+        $uriBuilder = new UriBuilder();
+        $possibleRequest = $this->runtime->fusionGlobals->get('request');
+        if ($possibleRequest instanceof ActionRequest) {
+            $uriBuilder->setRequest($possibleRequest);
+        } else {
+            // unfortunately, the uri-builder always needs a request at hand and cannot build uris without
+            // even, if the default param merging would not be required
+            // this will improve with a reformed uri building:
+            // https://github.com/neos/flow-development-collection/pull/2744
+            $uriBuilder->setRequest(
+                ActionRequest::fromHttpRequest(ServerRequest::fromGlobals())
+            );
+        }
+        $uriBuilder
+            ->setFormat($this->getFormat())
+            ->setCreateAbsoluteUri($this->isAbsolute())
+            ->setArguments($this->getAdditionalParams())
+            ->setSection($this->getSection())
+            ->setAddQueryString($this->getAddQueryString())
+            ->setArgumentsToBeExcludedFromQueryString($this->getArgumentsToBeExcludedFromQueryString());
 
         try {
-            return $this->linkingService->createNodeUri(
-                $this->runtime->getControllerContext(),
-                $this->getNode(),
-                $baseNode,
-                $this->getFormat(),
-                $this->isAbsolute(),
-                $this->getAdditionalParams(),
-                $this->getSection(),
-                $this->getAddQueryString(),
-                $this->getArgumentsToBeExcludedFromQueryString()
-            );
-        } catch (NeosException $exception) {
-            // TODO: Revisit if we actually need to store a stack trace.
-            $logMessage = $this->throwableStorage->logThrowable($exception);
-            $this->logger->error($logMessage, LogEnvironment::fromMethodName(__METHOD__));
-            return '';
+            return (string)NodeUriBuilder::fromUriBuilder($uriBuilder)->uriFor($nodeAddress);
+        } catch (NoMatchingRouteException) {
+            $this->systemLogger->warning(sprintf('Could not resolve "%s" to a node uri. Arguments: %s', $node->nodeAggregateId->value, json_encode($uriBuilder->getLastArguments())), LogEnvironment::fromMethodName(__METHOD__));
         }
+        return '';
     }
 }

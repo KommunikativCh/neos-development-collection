@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\Service;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,8 +10,16 @@ namespace Neos\Neos\Service;
  * source code.
  */
 
-use Neos\ContentRepository\Domain\Model\NodeInterface;
+declare(strict_types=1);
+
+namespace Neos\Neos\Service;
+
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
+use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
+use Neos\Flow\Security\Authorization\PrivilegeManagerInterface;
+use Neos\Fusion\Service\HtmlAugmenter as FusionHtmlAugmenter;
+use Neos\Neos\FrontendRouting\NodeAddressFactory;
 
 /**
  * The content element editable service adds the necessary markup around
@@ -24,11 +31,41 @@ use Neos\Flow\Annotations as Flow;
 class ContentElementEditableService
 {
     /**
-     * Wrap the $content identified by $node with the needed markup for the backend.
-     * This method is replaced by the Neos.Ui package via an aspect to add the needed markup for inline editing.
+     * @Flow\Inject
+     * @var PrivilegeManagerInterface
      */
-    public function wrapContentProperty(NodeInterface $node, string $property, string $content): string
+    protected $privilegeManager;
+
+    /**
+     * @Flow\Inject
+     * @var FusionHtmlAugmenter
+     */
+    protected $htmlAugmenter;
+
+    /**
+     * @Flow\Inject
+     * @var ContentRepositoryRegistry
+     */
+    protected $contentRepositoryRegistry;
+
+    public function wrapContentProperty(Node $node, string $property, string $content): string
     {
-        return $content;
+        $contentRepository = $this->contentRepositoryRegistry->get(
+            $node->subgraphIdentity->contentRepositoryId
+        );
+
+        // TODO: permissions
+        //if (!$this->nodeAuthorizationService->isGrantedToEditNode($node)) {
+        //    return $content;
+        //}
+
+        $attributes = [
+            'data-__neos-property' => $property,
+            'data-__neos-editable-node-contextpath' => NodeAddressFactory::create($contentRepository)
+                ->createFromNode($node)
+                ->serializeForUri()
+        ];
+
+        return $this->htmlAugmenter->addAttributes($content, $attributes, 'span');
     }
 }

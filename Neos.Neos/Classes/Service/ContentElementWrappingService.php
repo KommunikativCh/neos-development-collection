@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\Service;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,13 +10,19 @@ namespace Neos\Neos\Service;
  * source code.
  */
 
+declare(strict_types=1);
+
+namespace Neos\Neos\Service;
+
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
+use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Security\Authorization\PrivilegeManagerInterface;
-use Neos\Neos\Domain\Service\ContentContext;
-use Neos\ContentRepository\Domain\Model\Node;
-use Neos\ContentRepository\Domain\Model\NodeInterface;
-use Neos\ContentRepository\Service\AuthorizationService;
+use Neos\Flow\Session\SessionInterface;
 use Neos\Fusion\Service\HtmlAugmenter as FusionHtmlAugmenter;
+use Neos\Neos\FrontendRouting\NodeAddressFactory;
+use Neos\Neos\Ui\Domain\Service\UserLocaleService;
+use Neos\Neos\Ui\Fusion\Helper\NodeInfoHelper;
 
 /**
  * The content element wrapping service adds the necessary markup around
@@ -36,51 +41,87 @@ class ContentElementWrappingService
 
     /**
      * @Flow\Inject
-     * @var AuthorizationService
-     */
-    protected $nodeAuthorizationService;
-
-    /**
-     * @Flow\Inject
      * @var FusionHtmlAugmenter
      */
     protected $htmlAugmenter;
 
     /**
-     * This is an extensibility point for other packages to add additional attributes to the wrapping tag.
-     * This method is replaced by the Neos.Ui package via an aspect to add the needed markup for selection.
-     *
-     * @param array $additionalAttributes additional attributes in the form ['<attribute-name>' => '<attibute-value>', ...] to be rendered in the element wrapping
+     * @Flow\Inject
+     * @var SessionInterface
      */
-    public function wrapContentObject(NodeInterface $node, string $content, string $fusionPath, array $additionalAttributes = []): string
-    {
-        return $content;
-    }
+    protected $session;
 
     /**
-     * @param array $additionalAttributes additional attributes in the form ['<attribute-name>' => '<attibute-value>', ...] to be rendered in the element wrapping
+     * @Flow\Inject
+     * @var UserLocaleService
      */
-    public function wrapCurrentDocumentMetadata(NodeInterface $node, string $content, string $fusionPath, array $additionalAttributes = []): string
-    {
-        if ($this->needsMetadata($node, true) === false) {
-            return $content;
-        }
+    protected $userLocaleService;
 
+    /**
+     * @Flow\Inject
+     * @var NodeInfoHelper
+     */
+    protected $nodeInfoHelper;
+
+    /**
+     * @Flow\Inject
+     * @var ContentRepositoryRegistry
+     */
+    protected $contentRepositoryRegistry;
+
+    /**
+     * Wrap the $content identified by $node with the needed markup for the backend.
+     *
+     * @param array<string,string> $additionalAttributes
+     */
+    public function wrapContentObject(
+        Node $node,
+        string $content,
+        string $fusionPath,
+        array $additionalAttributes = []
+    ): ?string {
+        $contentRepository = $this->contentRepositoryRegistry->get(
+            $node->subgraphIdentity->contentRepositoryId
+        );
+
+        // TODO: reenable permissions
+        //if ($this->nodeAuthorizationService->isGrantedToEditNode($node) === false) {
+        //    return $content;
+        //}
+
+
+        $nodeAddress = NodeAddressFactory::create($contentRepository)->createFromNode($node);
         $attributes = $additionalAttributes;
-        $attributes['data-node-__fusion-path'] = $fusionPath;
-        $attributes = $this->addCssClasses($attributes, $node, []);
+        $attributes['data-__neos-fusion-path'] = $fusionPath;
+        $attributes['data-__neos-node-contextpath'] = $nodeAddress->serializeForUri();
 
-        return $this->htmlAugmenter->addAttributes($content, $attributes, 'div', ['typeof']);
+        $this->userLocaleService->switchToUILocale();
+
+        // TODO illegal dependency on ui
+        $serializedNode = json_encode($this->nodeInfoHelper->renderNodeWithPropertiesAndChildrenInformation($node));
+
+        $this->userLocaleService->switchToUILocale(true);
+
+        $wrappedContent = $this->htmlAugmenter->addAttributes($content, $attributes, 'div');
+        $nodeContextPath = $nodeAddress->serializeForUri();
+        /** @codingStandardsIgnoreStart */
+        $wrappedContent .= "<script data-neos-nodedata>(function(){(this['@Neos.Neos.Ui:Nodes'] = this['@Neos.Neos.Ui:Nodes'] || {})['{$nodeContextPath}'] = {$serializedNode}})()</script>";
+        /** @codingStandardsIgnoreEnd */
+
+        return $wrappedContent;
     }
 
     /**
      * Add required CSS classes to the attributes.
+     *
+     * @param array<string,mixed> $attributes
+     * @param array<string,mixed> $initialClasses
+     * @return array<string,mixed>
      */
-    protected function addCssClasses(array $attributes, NodeInterface $node, array $initialClasses = []): array
+    protected function addCssClasses(array $attributes, Node $node, array $initialClasses = []): array
     {
         $classNames = $initialClasses;
-        // FIXME: The `dimensionsAreMatchingTargetDimensionValues` method should become part of the NodeInterface if it is used here .
-        if ($node instanceof Node && !$node->dimensionsAreMatchingTargetDimensionValues()) {
+        if (!$node->subgraphIdentity->dimensionSpacePoint->equals($node->originDimensionSpacePoint)) {
             $classNames[] = 'neos-contentelement-shine-through';
         }
 
@@ -89,64 +130,5 @@ class ContentElementWrappingService
         }
 
         return $attributes;
-    }
-
-    /**
-     * Collects CSS class names used for styling editable elements in the Neos backend.
-     */
-    protected function collectEditingClassNames(NodeInterface $node): array
-    {
-        $classNames = [];
-
-        if ($node->getNodeType()->isOfType('Neos.Neos:ContentCollection')) {
-            // This is needed since the backend relies on this class (should not be necessary)
-            $classNames[] = 'neos-contentcollection';
-        } else {
-            $classNames[] = 'neos-contentelement';
-        }
-
-        if ($node->isRemoved()) {
-            $classNames[] = 'neos-contentelement-removed';
-        }
-
-        if ($node->isHidden()) {
-            $classNames[] = 'neos-contentelement-hidden';
-        }
-
-        if ($this->isInlineEditable($node) === false) {
-            $classNames[] = 'neos-not-inline-editable';
-        }
-
-        return $classNames;
-    }
-
-    /**
-     * Determine if the Node or one of it's properties is inline editable.
-            $parsedType = TypeHandling::parseType($dataType);
-     */
-    protected function isInlineEditable(NodeInterface $node): bool
-    {
-        $uiConfiguration = $node->getNodeType()->hasConfiguration('ui') ? $node->getNodeType()->getConfiguration('ui') : [];
-        return (
-            (isset($uiConfiguration['inlineEditable']) && $uiConfiguration['inlineEditable'] === true) ||
-            $this->hasInlineEditableProperties($node)
-        );
-    }
-
-    /**
-     * Checks if the given Node has any properties configured as 'inlineEditable'
-     */
-    protected function hasInlineEditableProperties(NodeInterface $node): bool
-    {
-        return array_reduce(array_values($node->getNodeType()->getProperties()), static function ($hasInlineEditableProperties, $propertyConfiguration) {
-            return ($hasInlineEditableProperties || (isset($propertyConfiguration['ui']['inlineEditable']) && $propertyConfiguration['ui']['inlineEditable'] === true));
-        }, false);
-    }
-
-    protected function needsMetadata(NodeInterface $node, bool $renderCurrentDocumentMetadata): bool
-    {
-        /** @var $contentContext ContentContext */
-        $contentContext = $node->getContext();
-        return ($contentContext->isInBackend() === true && ($renderCurrentDocumentMetadata === true || $this->nodeAuthorizationService->isGrantedToEditNode($node) === true));
     }
 }

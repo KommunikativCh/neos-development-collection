@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Neos\Neos\Controller;
@@ -17,7 +18,6 @@ use Neos\Flow\Annotations as Flow;
 use Neos\Cache\Frontend\StringFrontend;
 use Neos\Error\Messages\Message;
 use Neos\Flow\Http\Cookie;
-use Neos\Flow\I18n\Translator;
 use Neos\Flow\Mvc\ActionRequest;
 use Neos\Flow\Mvc\Exception\InvalidFlashMessageConfigurationException;
 use Neos\Flow\Mvc\Exception\StopActionException;
@@ -31,6 +31,7 @@ use Neos\Flow\Session\Exception\SessionNotStartedException;
 use Neos\Flow\Session\SessionInterface;
 use Neos\Flow\Session\SessionManagerInterface;
 use Neos\Fusion\View\FusionView;
+use Neos\Neos\Controller\TranslationTrait;
 use Neos\Neos\Domain\Repository\DomainRepository;
 use Neos\Neos\Domain\Repository\SiteRepository;
 use Neos\Neos\Service\BackendRedirectionService;
@@ -40,40 +41,30 @@ use Neos\Neos\Service\BackendRedirectionService;
  */
 class LoginController extends AbstractAuthenticationController
 {
+    use TranslationTrait;
+
     /**
      * @var string
      */
     protected $defaultViewObjectName = FusionView::class;
 
-    /**
-     * @Flow\Inject
-     * @var SessionInterface
-     */
-    protected $session;
+    #[Flow\Inject]
+    protected SessionInterface $session;
 
-    /**
-     * @Flow\Inject
-     * @var SessionManagerInterface
-     */
-    protected $sessionManager;
+    #[Flow\Inject]
+    protected SessionManagerInterface $sessionManager;
 
-    /**
-     * @Flow\Inject
-     * @var BackendRedirectionService
-     */
-    protected $backendRedirectionService;
+    #[Flow\Inject]
+    protected BackendRedirectionService $backendRedirectionService;
 
-    /**
-     * @Flow\Inject
-     * @var DomainRepository
-     */
-    protected $domainRepository;
+    #[Flow\Inject]
+    protected DomainRepository $domainRepository;
 
-    /**
-     * @Flow\Inject
-     * @var SiteRepository
-     */
-    protected $siteRepository;
+    #[Flow\Inject]
+    protected SiteRepository $siteRepository;
+
+    #[Flow\Inject]
+    protected FlashMessageService $flashMessageService;
 
     /**
      * @Flow\Inject
@@ -88,19 +79,7 @@ class LoginController extends AbstractAuthenticationController
     protected $sessionName;
 
     /**
-     * @Flow\Inject
-     * @var FlashMessageService
-     */
-    protected $flashMessageService;
-
-    /**
-     * @Flow\Inject
-     * @var Translator
-     */
-    protected $translator;
-
-    /**
-     * @var array
+     * @var array<string,class-string>
      */
     protected $viewFormatToObjectNameMap = [
         'html' => FusionView::class,
@@ -108,7 +87,7 @@ class LoginController extends AbstractAuthenticationController
     ];
 
     /**
-     * @var array
+     * @var array<int,string>
      */
     protected $supportedMediaTypes = [
         'text/html',
@@ -120,10 +99,18 @@ class LoginController extends AbstractAuthenticationController
      */
     public function initializeIndexAction(): void
     {
-        if (is_array($this->request->getInternalArgument('__authentication'))) {
-            $authentication = $this->request->getInternalArgument('__authentication');
-            if (isset($authentication['Neos']['Flow']['Security']['Authentication']['Token']['UsernamePassword']['username'])) {
-                $this->request->setArgument('username', $authentication['Neos']['Flow']['Security']['Authentication']['Token']['UsernamePassword']['username']);
+        /** @var array<string,mixed>|string|object|null $authenticationArgument */
+        $authenticationArgument = $this->request->getInternalArgument('__authentication');
+        if (is_array($authenticationArgument)) {
+            if (
+                isset($authenticationArgument['Neos']['Flow']['Security']['Authentication']
+                    ['Token']['UsernamePassword']['username'])
+            ) {
+                $this->request->setArgument(
+                    'username',
+                    $authenticationArgument['Neos']['Flow']['Security']['Authentication']
+                    ['Token']['UsernamePassword']['username']
+                );
             }
         }
     }
@@ -155,7 +142,8 @@ class LoginController extends AbstractAuthenticationController
             'styles' => array_filter($this->settings['userInterface']['backendLoginForm']['stylesheets']),
             'username' => $username,
             'site' => $currentSite,
-            'flashMessages' => $this->flashMessageService->getFlashMessageContainerForRequest($this->request)->getMessagesAndFlush(),
+            'flashMessages' => $this->flashMessageService->getFlashMessageContainerForRequest($this->request)
+                ->getMessagesAndFlush(),
         ]);
     }
 
@@ -169,6 +157,7 @@ class LoginController extends AbstractAuthenticationController
      */
     public function tokenLoginAction(string $token): void
     {
+        /** @var string|false $newSessionId */
         $newSessionId = $this->loginTokenCache->get($token);
         $this->loginTokenCache->remove($token);
 
@@ -180,13 +169,15 @@ class LoginController extends AbstractAuthenticationController
         $this->logger->debug(sprintf('Token-based login succeeded, token %s', $token));
 
         $newSession = $this->sessionManager->getSession($newSessionId);
-        if ($newSession->canBeResumed()) {
+        if ($newSession?->canBeResumed()) {
             $newSession->resume();
         }
-        if ($newSession->isStarted()) {
-            $newSession->putData('lastVisitedNode', null);
-        } else {
-            $this->logger->error(sprintf('Failed resuming or starting session %s which was referred to in the login token %s.', $newSessionId, $token));
+        if (!$newSession?->isStarted()) {
+            $this->logger->error(sprintf(
+                'Failed resuming or starting session %s which was referred to in the login token %s.',
+                $newSessionId,
+                $token
+            ));
         }
 
         $this->replaceSessionCookie($newSessionId);
@@ -199,14 +190,14 @@ class LoginController extends AbstractAuthenticationController
      * @param AuthenticationRequiredException $exception The exception thrown while the authentication process
      * @return void
      */
-    protected function onAuthenticationFailure(AuthenticationRequiredException $exception = null)
+    protected function onAuthenticationFailure(AuthenticationRequiredException $exception = null): void
     {
         if ($this->view instanceof JsonView) {
             $this->view->assign('value', ['success' => false]);
         } else {
             $this->addFlashMessage(
-                $this->translator->translateById('login.wrongCredentials.body', [], null, null, 'Main', 'Neos.Neos'),
-                $this->translator->translateById('login.wrongCredentials.title', [], null, null, 'Main', 'Neos.Neos'),
+                $this->getLabel('login.wrongCredentials.body'),
+                $this->getLabel('login.wrongCredentials.title'),
                 Message::SEVERITY_ERROR,
                 [],
                 $exception === null ? 1347016771 : $exception->getCode()
@@ -217,20 +208,24 @@ class LoginController extends AbstractAuthenticationController
     /**
      * Is called if authentication was successful.
      *
-     * @param ActionRequest|null $originalRequest The request that was intercepted by the security framework, NULL if there was none
-     * @return void
+     * @param ActionRequest|null $originalRequest The request that was intercepted by the security framework,
+     *                                            NULL if there was none
      * @throws SessionNotStartedException
      * @throws StopActionException
      * @throws \Neos\Flow\Mvc\Exception\NoSuchArgumentException
      */
-    protected function onAuthenticationSuccess(ActionRequest $originalRequest = null)
+    protected function onAuthenticationSuccess(ActionRequest $originalRequest = null): null
     {
         if ($this->view instanceof JsonView) {
-            $this->view->assign('value', ['success' => $this->authenticationManager->isAuthenticated(), 'csrfToken' => $this->securityContext->getCsrfProtectionToken()]);
+            $this->view->assign(
+                'value',
+                [
+                    'success' => $this->authenticationManager->isAuthenticated(),
+                    'csrfToken' => $this->securityContext->getCsrfProtectionToken()
+                ]
+            );
+            return null;
         } else {
-            if ($this->request->hasArgument('lastVisitedNode') && $this->request->getArgument('lastVisitedNode') !== '') {
-                $this->session->putData('lastVisitedNode', $this->request->getArgument('lastVisitedNode'));
-            }
             if ($originalRequest !== null) {
                 // Redirect to the location that redirected to the login form because the user was nog logged in
                 $this->redirectToRequest($originalRequest);
@@ -249,21 +244,17 @@ class LoginController extends AbstractAuthenticationController
      *
      * @return void
      */
-    public function logoutAction()
+    public function logoutAction(): void
     {
-        $possibleRedirectionUri = $this->backendRedirectionService->getAfterLogoutRedirectionUri($this->request);
         parent::logoutAction();
         switch ($this->request->getFormat()) {
             case 'json':
                 $this->view->assign('value', ['success' => true]);
                 break;
             default:
-                if ($possibleRedirectionUri !== null) {
-                    $this->redirectToUri($possibleRedirectionUri);
-                }
                 $this->addFlashMessage(
-                    $this->translator->translateById('login.loggedOut.body', [], null, null, 'Main', 'Neos.Neos'),
-                    $this->translator->translateById('login.loggedOut.title', [], null, null, 'Main', 'Neos.Neos'),
+                    $this->getLabel('login.loggedOut.body'),
+                    $this->getLabel('login.loggedOut.title'),
                     Message::SEVERITY_NOTICE,
                     [],
                     1318421560
@@ -275,9 +266,8 @@ class LoginController extends AbstractAuthenticationController
     /**
      * Disable the default error flash message
      *
-     * @return bool
      */
-    protected function getErrorFlashMessage()
+    protected function getErrorFlashMessage(): false
     {
         return false;
     }

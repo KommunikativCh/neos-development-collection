@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\ViewHelpers\Rendering;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,7 +10,14 @@ namespace Neos\Neos\ViewHelpers\Rendering;
  * source code.
  */
 
-use Neos\ContentRepository\Domain\Model\NodeInterface;
+declare(strict_types=1);
+
+namespace Neos\Neos\ViewHelpers\Rendering;
+
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
+use Neos\FluidAdaptor\Core\ViewHelper\AbstractViewHelper;
+use Neos\Fusion\ViewHelpers\FusionContextTrait;
+use Neos\Neos\Domain\Model\RenderingMode;
 
 /**
  * ViewHelper to find out if Neos is rendering the live website.
@@ -36,29 +42,19 @@ use Neos\ContentRepository\Domain\Model\NodeInterface;
  * Shown in the backend.
  * </output>
  */
-class LiveViewHelper extends AbstractRenderingStateViewHelper
+class LiveViewHelper extends AbstractViewHelper
 {
-    /**
-     * Initialize the arguments.
-     *
-     * @return void
-     * @throws \Neos\FluidAdaptor\Core\ViewHelper\Exception
-     */
-    public function initializeArguments()
-    {
-        parent::initializeArguments();
-        $this->registerArgument('node', NodeInterface::class, 'Node');
-    }
+    use FusionContextTrait;
 
     /**
-     * @return boolean
-     * @throws \Neos\Flow\Persistence\Exception\IllegalObjectTypeException
      * @throws \Neos\FluidAdaptor\Core\ViewHelper\Exception
      */
     public function render(): bool
     {
-        $context = $this->getNodeContext($this->arguments['node']);
-
-        return $context->isLive();
+        $renderingMode = $this->getContextVariable('renderingMode');
+        if ($renderingMode instanceof RenderingMode) {
+            return $renderingMode->name === RenderingMode::FRONTEND;
+        }
+        return true;
     }
 }

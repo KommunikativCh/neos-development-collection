@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\NodeTypePostprocessor;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,11 +10,15 @@ namespace Neos\Neos\NodeTypePostprocessor;
  * source code.
  */
 
+declare(strict_types=1);
+
+namespace Neos\Neos\NodeTypePostprocessor;
+
+use Neos\ContentRepository\Core\NodeType\NodeType;
+use Neos\ContentRepository\Core\NodeType\NodeTypePostprocessorInterface;
 use Neos\Flow\Annotations as Flow;
-use Neos\ContentRepository\NodeTypePostprocessor\NodeTypePostprocessorInterface;
-use Neos\ContentRepository\Domain\Model\NodeType;
-use Neos\Utility\Arrays;
 use Neos\Neos\Exception;
+use Neos\Utility\Arrays;
 
 /**
  * Add default editor configurations for properties based on type and editor
@@ -23,26 +26,51 @@ use Neos\Neos\Exception;
 class DefaultPropertyEditorPostprocessor implements NodeTypePostprocessorInterface
 {
     /**
-     * @var array
+     * @var array<string,mixed>
      * @Flow\InjectConfiguration(package="Neos.Neos", path="userInterface.inspector.dataTypes")
      */
     protected $dataTypesDefaultConfiguration;
 
     /**
-     * @var array
+     * @var array<string,mixed>
      * @Flow\InjectConfiguration(package="Neos.Neos", path="userInterface.inspector.editors")
      */
     protected $editorDefaultConfiguration;
 
     /**
      * @param NodeType $nodeType (uninitialized) The node type to process
-     * @param array $configuration input configuration
-     * @param array $options The processor options
+     * @param array<string,mixed> $configuration input configuration
+     * @param array<string,mixed> $options The processor options
      * @return void
      */
     public function process(NodeType $nodeType, array &$configuration, array $options): void
     {
-        $nodeTypeName = $nodeType->getName();
+        $nodeTypeName = $nodeType->name->value;
+
+        foreach ($configuration['references'] as $referenceName => &$referenceConfiguration) {
+            if (!isset($referenceConfiguration['ui']['inspector'])) {
+                // we presume that these are properties wich are not shown
+                continue;
+            }
+
+            $editor = $referenceConfiguration['ui']['inspector']['editor'] ?? null;
+
+            if (!$editor) {
+                $maxAllowedItems = $referenceConfiguration['constraints']['maxItems'] ?? null;
+                $editor = $maxAllowedItems === 1
+                    ? ($this->dataTypesDefaultConfiguration['reference']['editor'] ?? 'Neos.Neos/Inspector/Editors/ReferenceEditor')
+                    : ($this->dataTypesDefaultConfiguration['references']['editor'] ?? 'Neos.Neos/Inspector/Editors/ReferencesEditor');
+            }
+
+            $mergedInspectorConfiguration = $this->editorDefaultConfiguration[$editor] ?? [];
+            $mergedInspectorConfiguration = Arrays::arrayMergeRecursiveOverrule(
+                $mergedInspectorConfiguration,
+                $referenceConfiguration['ui']['inspector']
+            );
+            $referenceConfiguration['ui']['inspector'] = $mergedInspectorConfiguration;
+            $referenceConfiguration['ui']['inspector']['editor'] = $editor;
+        }
+
         if (isset($configuration['properties']) && is_array($configuration['properties'])) {
             foreach ($configuration['properties'] as $propertyName => &$propertyConfiguration) {
                 if (!isset($propertyConfiguration['type'])) {
@@ -52,6 +80,7 @@ class DefaultPropertyEditorPostprocessor implements NodeTypePostprocessorInterfa
                 $type = $propertyConfiguration['type'];
 
                 if (!isset($propertyConfiguration['ui']['inspector'])) {
+                    // we presume that these are properties wich are not shown
                     continue;
                 }
 
@@ -65,7 +94,10 @@ class DefaultPropertyEditorPostprocessor implements NodeTypePostprocessorInterfa
                 } elseif (isset($defaultConfigurationFromDataType['editor'])) {
                     $editor = $defaultConfigurationFromDataType['editor'];
                 } else {
-                    throw new Exception('Could not find editor for ' . $propertyName . ' in node type ' . $nodeTypeName, 1436809123);
+                    throw new Exception(
+                        'Could not find editor for ' . $propertyName . ' in node type ' . $nodeTypeName,
+                        1436809123
+                    );
                 }
 
                 // SECOND STEP: Build up the full inspector configuration by merging:
@@ -73,43 +105,16 @@ class DefaultPropertyEditorPostprocessor implements NodeTypePostprocessorInterfa
                 // - take configuration from dataType
                 // - take configuration from properties (NodeTypes)
                 $mergedInspectorConfiguration = $this->editorDefaultConfiguration[$editor] ?? [];
-                $mergedInspectorConfiguration = Arrays::arrayMergeRecursiveOverrule($mergedInspectorConfiguration, $defaultConfigurationFromDataType);
-                $mergedInspectorConfiguration = Arrays::arrayMergeRecursiveOverrule($mergedInspectorConfiguration, $propertyConfiguration['ui']['inspector']);
+                $mergedInspectorConfiguration = Arrays::arrayMergeRecursiveOverrule(
+                    $mergedInspectorConfiguration,
+                    $defaultConfigurationFromDataType
+                );
+                $mergedInspectorConfiguration = Arrays::arrayMergeRecursiveOverrule(
+                    $mergedInspectorConfiguration,
+                    $propertyConfiguration['ui']['inspector']
+                );
                 $propertyConfiguration['ui']['inspector'] = $mergedInspectorConfiguration;
                 $propertyConfiguration['ui']['inspector']['editor'] = $editor;
-            }
-        }
-        unset($propertyConfiguration);
-        if (isset($configuration['ui']['creationDialog']['elements']) && is_array($configuration['ui']['creationDialog']['elements'])) {
-            foreach ($configuration['ui']['creationDialog']['elements'] as &$elementConfiguration) {
-                if (!isset($elementConfiguration['type'])) {
-                    continue;
-                }
-
-                $type = $elementConfiguration['type'];
-                $defaultConfigurationFromDataType = $this->dataTypesDefaultConfiguration[$type] ?? [];
-
-                // FIRST STEP: Figure out which editor should be used
-                // - Default: editor as configured from the data type
-                // - Override: editor as configured from the property configuration.
-                if (isset($elementConfiguration['ui']['editor'])) {
-                    $editor = $elementConfiguration['ui']['editor'];
-                } elseif (isset($defaultConfigurationFromDataType['editor'])) {
-                    $editor = $defaultConfigurationFromDataType['editor'];
-                } else {
-                    // No exception since the configuration could be a partial configuration overriding a property with showInCreationDialog flag set
-                    continue;
-                }
-
-                // SECOND STEP: Build up the full UI configuration by merging:
-                // - take configuration from editor defaults
-                // - take configuration from dataType
-                // - take configuration from creationDialog elements (NodeTypes)
-                $mergedUiConfiguration = $this->editorDefaultConfiguration[$editor] ?? [];
-                $mergedUiConfiguration = Arrays::arrayMergeRecursiveOverrule($mergedUiConfiguration, $defaultConfigurationFromDataType);
-                $mergedUiConfiguration = Arrays::arrayMergeRecursiveOverrule($mergedUiConfiguration, $elementConfiguration['ui']);
-                $elementConfiguration['ui'] = $mergedUiConfiguration;
-                $elementConfiguration['ui']['editor'] = $editor;
             }
         }
     }

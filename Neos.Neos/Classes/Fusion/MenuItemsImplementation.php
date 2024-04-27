@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\Fusion;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,40 +10,57 @@ namespace Neos\Neos\Fusion;
  * source code.
  */
 
-use Neos\ContentRepository\Domain\Model\NodeInterface;
+declare(strict_types=1);
+
+namespace Neos\Neos\Fusion;
+
+use Neos\ContentRepository\Core\NodeType\NodeTypeNames;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\CountAncestorNodesFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindAncestorNodesFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindSubtreeFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\NodeType\NodeTypeCriteria;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Nodes;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Subtree;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateIds;
 use Neos\Fusion\Exception as FusionException;
-use Neos\Fusion\Exception;
+use Neos\Neos\Domain\Service\NodeTypeNameFactory;
 
 /**
- * A Fusion MenuItems object
+ * A Fusion Menu object
  */
 class MenuItemsImplementation extends AbstractMenuItemsImplementation
 {
     /**
      * Hard limit for the maximum number of levels supported by this menu
      */
-    const MAXIMUM_LEVELS_LIMIT = 100;
+    public const MAXIMUM_LEVELS_LIMIT = 100;
 
     /**
      * Internal cache for the startingPoint tsValue.
-     *
-     * @var NodeInterface
      */
-    protected $startingPoint;
+    protected ?Node $startingPoint = null;
 
     /**
      * Internal cache for the lastLevel value.
-     *
-     * @var integer
      */
-    protected $lastLevel;
+    protected ?int $lastLevel = null;
 
     /**
      * Internal cache for the maximumLevels tsValue.
-     *
-     * @var integer
      */
-    protected $maximumLevels;
+    protected ?int $maximumLevels = null;
+
+    /**
+     * Internal cache for the ancestors aggregate ids of the currentNode.
+     */
+    protected ?NodeAggregateIds $currentNodeRootlineAggregateIds = null;
+
+    /**
+     * Runtime cache for the node type criteria to be applied
+     */
+    protected ?NodeTypeCriteria $nodeTypeCriteria = null;
 
     /**
      * The last navigation level which should be rendered.
@@ -56,34 +72,29 @@ class MenuItemsImplementation extends AbstractMenuItemsImplementation
      * -1 = one level above the current page
      * -2 = two levels above the current page
      * ...
-     *
-     * @return integer
      */
-    public function getEntryLevel()
+    protected function getEntryLevel(): int
     {
         return $this->fusionValue('entryLevel');
     }
 
     /**
      * NodeType filter for nodes displayed in menu
-     *
-     * @return string
      */
-    public function getFilter()
+    protected function getFilter(): string
     {
         $filter = $this->fusionValue('filter');
         if ($filter === null) {
-            $filter = 'Neos.Neos:Document';
+            $filter = NodeTypeNameFactory::NAME_DOCUMENT;
         }
+
         return $filter;
     }
 
     /**
      * Maximum number of levels which should be rendered in this menu.
-     *
-     * @return integer
      */
-    public function getMaximumLevels()
+    protected function getMaximumLevels(): int
     {
         if ($this->maximumLevels === null) {
             $this->maximumLevels = $this->fusionValue('maximumLevels');
@@ -97,10 +108,8 @@ class MenuItemsImplementation extends AbstractMenuItemsImplementation
 
     /**
      * Return evaluated lastLevel value.
-     *
-     * @return integer
      */
-    public function getLastLevel()
+    protected function getLastLevel(): ?int
     {
         if ($this->lastLevel === null) {
             $this->lastLevel = $this->fusionValue('lastLevel');
@@ -112,10 +121,7 @@ class MenuItemsImplementation extends AbstractMenuItemsImplementation
         return $this->lastLevel;
     }
 
-    /**
-     * @return NodeInterface
-     */
-    public function getStartingPoint()
+    protected function getStartingPoint(): ?Node
     {
         if ($this->startingPoint === null) {
             $this->startingPoint = $this->fusionValue('startingPoint');
@@ -125,9 +131,9 @@ class MenuItemsImplementation extends AbstractMenuItemsImplementation
     }
 
     /**
-     * @return array
+     * @return array<int,Node>|Nodes|null
      */
-    public function getItemCollection()
+    protected function getItemCollection(): array|Nodes|null
     {
         return $this->fusionValue('itemCollection');
     }
@@ -136,74 +142,108 @@ class MenuItemsImplementation extends AbstractMenuItemsImplementation
      * Builds the array of menu items containing those items which match the
      * configuration set for this Menu object.
      *
+     * @return array<int,MenuItem> An array of menu items and further information
      * @throws FusionException
-     * @return array An array of menu items and further information
      */
-    protected function buildItems()
+    protected function buildItems(): array
     {
-        $items = [];
-
-        if ($this->getItemCollection() !== null) {
-            $menuLevelCollection = $this->getItemCollection();
-        } else {
-            $entryParentNode = $this->findMenuStartingPoint();
-            if ($entryParentNode === null) {
-                return $items;
+        $subgraph = $this->contentRepositoryRegistry->subgraphForNode($this->getCurrentNode());
+        if (!is_null($this->getItemCollection())) {
+            $items = [];
+            foreach ($this->getItemCollection() as $node) {
+                if ($this->getMaximumLevels() > 0) {
+                    $childSubtree = $subgraph->findSubtree(
+                        $node->nodeAggregateId,
+                        FindSubtreeFilter::create(nodeTypes: $this->getNodeTypeCriteria(), maximumLevels: $this->getMaximumLevels() - 1)
+                    );
+                    if ($childSubtree === null) {
+                        continue;
+                    }
+                    $items[] = $this->buildMenuItemFromSubtree($childSubtree, 1);
+                } else {
+                    $items[] = $this->buildMenuItemFromNode($node);
+                }
             }
-            $menuLevelCollection = $entryParentNode->getChildNodes($this->getFilter());
+            return $items;
         }
 
-        $items = $this->buildMenuLevelRecursive($menuLevelCollection);
+        $entryParentNodeAggregateId = $this->findMenuStartingPointAggregateId();
+        if (!$entryParentNodeAggregateId) {
+            return [];
+        }
 
-        return $items;
+        $maximumLevels = $this->getMaximumLevels();
+        $lastLevels = $this->getLastLevel();
+        if ($lastLevels !== null) {
+            $depthOfEntryParentNodeAggregateId = $subgraph->countAncestorNodes(
+                $entryParentNodeAggregateId,
+                CountAncestorNodesFilter::create(
+                    NodeTypeCriteria::createWithAllowedNodeTypeNames(
+                        NodeTypeNames::with(
+                            NodeTypeNameFactory::forDocument()
+                        )
+                    )
+                )
+            );
+
+            if ($lastLevels > 0) {
+                $maxLevelsBasedOnLastLevel = max($lastLevels - $depthOfEntryParentNodeAggregateId, 0);
+                $maximumLevels = min($maximumLevels, $maxLevelsBasedOnLastLevel);
+            } elseif ($lastLevels < 0) {
+                $currentNodeAncestorAggregateIds = $this->getCurrentNodeRootlineAggregateIds();
+                $depthOfCurrentDocument = count(iterator_to_array($currentNodeAncestorAggregateIds)) - 1;
+                $maxLevelsBasedOnLastLevel = max($depthOfCurrentDocument + $lastLevels - $depthOfEntryParentNodeAggregateId + 1, 0);
+                $maximumLevels = min($maximumLevels, $maxLevelsBasedOnLastLevel);
+            }
+        }
+
+        $childSubtree = $subgraph->findSubtree(
+            $entryParentNodeAggregateId,
+            FindSubtreeFilter::create(
+                nodeTypes: $this->getNodeTypeCriteria(),
+                maximumLevels: $maximumLevels
+            )
+        );
+        if ($childSubtree === null) {
+            return [];
+        }
+        return $this->buildMenuItemFromSubtree($childSubtree)->getChildren();
     }
 
-    /**
-     * @param array $menuLevelCollection
-     * @return array
-     */
-    protected function buildMenuLevelRecursive(array $menuLevelCollection)
+    protected function buildMenuItemFromNode(Node $node): MenuItem
     {
-        $items = [];
-        foreach ($menuLevelCollection as $currentNode) {
-            $item = $this->buildMenuItemRecursive($currentNode);
-            if ($item === null) {
-                continue;
-            }
-
-            $items[] = $item;
-        }
-
-        return $items;
+        return new MenuItem(
+            $node,
+            $this->isCalculateItemStatesEnabled() ? $this->calculateItemState($node) : null,
+            $node->getLabel(),
+            0,
+            [],
+            $this->buildUri($node)
+        );
     }
 
-    /**
-     * Prepare the menu item with state and sub items if this isn't the last menu level.
-     *
-     * @param NodeInterface $currentNode
-     * @return array
-     */
-    protected function buildMenuItemRecursive(NodeInterface $currentNode)
+    protected function buildMenuItemFromSubtree(Subtree $subtree, int $startLevel = 0): MenuItem
     {
-        if ($this->isNodeHidden($currentNode)) {
-            return null;
+        $children = [];
+
+        foreach ($subtree->children as $childSubtree) {
+            $node = $childSubtree->node;
+            if (!$this->isNodeHidden($node)) {
+                $childNode = $this->buildMenuItemFromSubtree($childSubtree, $startLevel);
+                $children[] = $childNode;
+            }
         }
 
-        $item = [
-            'node' => $currentNode,
-            'state' => $this->calculateItemState($currentNode),
-            'label' => $currentNode->getLabel(),
-            'menuLevel' => $this->currentLevel,
-            'uri' => $this->buildUri($currentNode),
-        ];
+        $node = $subtree->node;
 
-        if (!$this->isOnLastLevelOfMenu($currentNode)) {
-            $this->currentLevel++;
-            $item['subItems'] = $this->buildMenuLevelRecursive($currentNode->getChildNodes($this->getFilter()));
-            $this->currentLevel--;
-        }
-
-        return $item;
+        return new MenuItem(
+            $node,
+            $this->isCalculateItemStatesEnabled() ? $this->calculateItemState($node) : null,
+            $node->getLabel(),
+            $subtree->level + $startLevel,
+            $children,
+            $this->buildUri($node)
+        );
     }
 
     /**
@@ -213,105 +253,72 @@ class MenuItemsImplementation extends AbstractMenuItemsImplementation
      *
      * If entryLevel is configured this will be taken into account as well.
      *
-     * @return NodeInterface
-     * @throws Exception
+     * @return NodeAggregateId|null
+     * @throws FusionException
      */
-    protected function findMenuStartingPoint()
+    protected function findMenuStartingPointAggregateId(): ?NodeAggregateId
     {
-        $fusionContext = $this->runtime->getCurrentContext();
-        $startingPoint = $this->getStartingPoint();
+        $traversalStartingPoint = $this->getStartingPoint() ?: $this->getCurrentNode();
 
-        if (!isset($fusionContext['node']) && !$startingPoint) {
-            throw new FusionException('You must either set a "startingPoint" for the menu or "node" must be set in the Fusion context.', 1369596980);
-        }
-        $startingPoint = $startingPoint ? : $fusionContext['node'];
-        $entryParentNode = $this->findParentNodeInBreadcrumbPathByLevel($this->getEntryLevel(), $startingPoint);
-
-        return $entryParentNode;
-    }
-
-    /**
-     * Checks if the given menuItem is on the last level for this menu, either defined by maximumLevels or lastLevels.
-     *
-     * @param NodeInterface $menuItemNode
-     * @return boolean
-     */
-    protected function isOnLastLevelOfMenu(NodeInterface $menuItemNode)
-    {
-        if ($this->currentLevel >= $this->getMaximumLevels()) {
-            return true;
+        if (!$traversalStartingPoint instanceof Node) {
+            throw new FusionException(
+                'You must either set a "startingPoint" for the menu or "node" must be set in the Fusion context.',
+                1369596980
+            );
         }
 
-        if (($this->getLastLevel() !== null)) {
-            if ($this->getNodeLevelInSite($menuItemNode) >= $this->calculateNodeDepthFromRelativeLevel($this->getLastLevel(), $this->currentNode)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Finds the node in the current breadcrumb path between current site node and
-     * current node whose level matches the specified entry level.
-     *
-     * @param integer $givenSiteLevel The site level child nodes of the to be found parent node should have. See $this->entryLevel for possible values.
-     * @param NodeInterface $startingPoint
-     * @return NodeInterface The parent node of the node at the specified level or NULL if none was found
-     */
-    protected function findParentNodeInBreadcrumbPathByLevel($givenSiteLevel, NodeInterface $startingPoint)
-    {
-        $parentNode = null;
-        if ($givenSiteLevel === 0) {
-            return $startingPoint;
-        }
-
-        $absoluteDepth = $this->calculateNodeDepthFromRelativeLevel($givenSiteLevel, $startingPoint);
-        if (($absoluteDepth - 1) > $this->getNodeLevelInSite($startingPoint)) {
-            return null;
-        }
-
-        $currentSiteNode = $this->currentNode->getContext()->getCurrentSiteNode();
-        $breadcrumbNodes = $currentSiteNode->getContext()->getNodesOnPath($currentSiteNode, $startingPoint);
-
-        if (isset($breadcrumbNodes[$absoluteDepth - 1])) {
-            $parentNode = $breadcrumbNodes[$absoluteDepth - 1];
-        }
-
-        return $parentNode;
-    }
-
-    /**
-     * Calculates an absolute depth value for a relative level given.
-     *
-     * @param integer $relativeLevel
-     * @param NodeInterface $referenceNode
-     * @return integer
-     */
-    protected function calculateNodeDepthFromRelativeLevel($relativeLevel, NodeInterface $referenceNode)
-    {
-        if ($relativeLevel > 0) {
-            $depth = $relativeLevel;
+        if ($this->getEntryLevel() === 0) {
+            return $traversalStartingPoint->nodeAggregateId;
+        } elseif ($this->getEntryLevel() < 0) {
+            $ancestorNodeAggregateIds = $this->getCurrentNodeRootlineAggregateIds();
+            $ancestorNodeAggregateIdArray = array_values(iterator_to_array($ancestorNodeAggregateIds));
+            return $ancestorNodeAggregateIdArray[$this->getEntryLevel() * -1] ?? null;
         } else {
-            $currentSiteDepth = $this->getNodeLevelInSite($referenceNode);
-            if ($currentSiteDepth + $relativeLevel < 1) {
-                $depth = 1;
-            } else {
-                $depth = $currentSiteDepth + $relativeLevel + 1;
-            }
+            $ancestorNodeAggregateIds = $this->getCurrentNodeRootlineAggregateIds();
+            $ancestorNodeAggregateIdArray = array_reverse(array_values(iterator_to_array($ancestorNodeAggregateIds)));
+            return $ancestorNodeAggregateIdArray[$this->getEntryLevel() - 1] ?? null;
         }
-
-        return $depth;
     }
 
-    protected function buildUri(NodeInterface $currentNode): string
+    protected function getNodeTypeCriteria(): NodeTypeCriteria
     {
-        $this->runtime->pushContextArray([
-            'itemNode' => $currentNode,
-            'documentNode' => $currentNode,
-        ]);
-        $uri = $this->runtime->render($this->path . '/itemUriRenderer');
-        $this->runtime->popContext();
-        return $uri;
+        if (!$this->nodeTypeCriteria) {
+            $this->nodeTypeCriteria = NodeTypeCriteria::fromFilterString($this->getFilter());
+        }
+        return $this->nodeTypeCriteria;
+    }
+
+    protected function getCurrentNodeRootlineAggregateIds(): NodeAggregateIds
+    {
+        if ($this->currentNodeRootlineAggregateIds instanceof NodeAggregateIds) {
+            return $this->currentNodeRootlineAggregateIds;
+        }
+        $subgraph = $this->contentRepositoryRegistry->subgraphForNode($this->getCurrentNode());
+        $currentNodeAncestors = $subgraph->findAncestorNodes(
+            $this->currentNode->nodeAggregateId,
+            FindAncestorNodesFilter::create(
+                NodeTypeCriteria::createWithAllowedNodeTypeNames(
+                    NodeTypeNames::with(
+                        NodeTypeNameFactory::forDocument()
+                    )
+                )
+            )
+        );
+
+        $this->currentNodeRootlineAggregateIds = NodeAggregateIds::create($this->currentNode->nodeAggregateId)
+            ->merge(NodeAggregateIds::fromNodes($currentNodeAncestors));
+
+        return $this->currentNodeRootlineAggregateIds;
+    }
+
+    protected function calculateItemState(Node $node): MenuItemState
+    {
+        if ($node->nodeAggregateId->equals($this->getCurrentNode()->nodeAggregateId)) {
+            return MenuItemState::CURRENT;
+        }
+        if ($this->getCurrentNodeRootlineAggregateIds()->contain($node->nodeAggregateId)) {
+            return MenuItemState::ACTIVE;
+        }
+        return MenuItemState::NORMAL;
     }
 }

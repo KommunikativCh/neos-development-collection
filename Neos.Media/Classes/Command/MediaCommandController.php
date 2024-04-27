@@ -44,9 +44,7 @@ use Neos\Media\Exception\ThumbnailServiceException;
 use Neos\Utility\Arrays;
 use Neos\Utility\Files;
 
-/**
- * @Flow\Scope("singleton")
- */
+#[Flow\Scope('singleton')]
 class MediaCommandController extends CommandController
 {
     /**

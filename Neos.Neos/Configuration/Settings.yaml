@@ -11,6 +11,10 @@
 Neos:
 
   Neos:
+    contentDimensions:
+      resolution:
+        uriPathSegmentDelimiter: '_'
+
     fusion:
       # if set to true, Fusion is cached on a per-site basis.
       # Depending on the size of your Fusion, will improve rendering times 20-100+ ms.
@@ -55,6 +59,14 @@ Neos:
       # The only limitation is that all segments must be unique across all dimenions.
       supportEmptySegmentForDimensions: true
 
+    sites:
+      '*':
+        uriPathSuffix: '.html'
+        contentRepository: default
+        contentDimensions:
+          resolver:
+            factoryClassName: Neos\Neos\FrontendRouting\DimensionResolution\Resolver\AutoUriPathResolverFactory
+
     nodeTypes:
       groups:
         general:
@@ -69,6 +81,10 @@ Neos:
           position: 200
           label: 'Neos.Neos:Main:nodeTypes.groups.plugins'
           collapsed: true
+
+    frontend:
+      # HTTP Status Code used for redirecting Neos.Neos:Shortcut to target
+      shortcutRedirectHttpStatusCode: 303
 
     userInterface:
 
@@ -214,11 +230,11 @@ Neos:
             editor: Neos.Neos/Inspector/Editors/DateTimeEditor
             editorOptions:
               format: d-m-Y
+          # special types uses for NodeType references to wire the "editor"
+          # singular "reference" will be used if constraints.maxItems is set to 1
           reference:
-            typeConverter: Neos\Neos\Service\Mapping\NodeReferenceConverter
             editor: Neos.Neos/Inspector/Editors/ReferenceEditor
           references:
-            typeConverter: Neos\Neos\Service\Mapping\NodeReferenceConverter
             editor: Neos.Neos/Inspector/Editors/ReferencesEditor
         editors:
           Neos.Neos/Inspector/Editors/CodeEditor:
@@ -259,12 +275,8 @@ Neos:
 
       defaultEditPreviewMode: inPlace
       editPreviewModes:
-        # Live mode is only configured here for consistency. You shouldn't change it.
-        live:
-          isEditingMode: false
-          isPreviewMode: false
-          fusionRenderingPath: ''
-          title: Live
+        # the system integrated rendering mode "frontend" cannot be configured
+        # frontend: {}
         inPlace:
           isEditingMode: true
           isPreviewMode: false
@@ -319,12 +331,6 @@ Neos:
             controller: 'Neos\Neos\Controller\Module\Management\WorkspacesController'
             description: 'Neos.Neos:Modules:workspaces.description'
             icon: fas fa-th-large
-            mainStylesheet: 'Lite'
-          history:
-            label: 'Neos.Neos:Modules:history.label'
-            controller: 'Neos\Neos\Controller\Module\Management\HistoryController'
-            description: 'Neos.Neos:Modules:history.description'
-            icon: fas fa-calendar-alt
             mainStylesheet: 'Lite'
       administration:
         label: 'Neos.Neos:Modules:administration.label'
@@ -386,18 +392,6 @@ Neos:
             icon: fas fa-user
             mainStylesheet: 'Lite'
 
-     # Settings for the Neos Event Log (** DO NOT USE, NO PUBLIC API YET **)
-    eventLog:
-      enabled: false
-      monitorEntities:
-        Neos\Flow\Security\Account:
-          events:
-            created: Account.Created
-            deleted: Account.Deleted
-          data:
-            accountIdentifier: '${entity.accountIdentifier}'
-            authenticationProviderName: '${entity.authenticationProviderName}'
-            name: '${entity.party.name.fullName}'
     transliterationRules:
       da:
         Å: Aa
@@ -423,16 +417,12 @@ Neos:
 
     http:
       middlewares:
-        'requestUriHostParameter':
+        'detectSite':
           position: 'before routing'
-          middleware: 'Neos\Neos\Routing\RequestUriHostMiddleware'
-
+          middleware: 'Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionMiddleware'
     mvc:
       routes:
-        'Neos.Neos':
-          variables:
-            # Set this to an empty string if you prefer URLs without the ".html" suffix
-            'defaultUriSuffix': '.html'
+        'Neos.Neos': true
         # Move Neos.Media routes before default Neos routes so that they have priority
         'Neos.Media':
           position: 'before Neos.Neos'
@@ -464,18 +454,6 @@ Neos:
     session:
       name: Neos_Session
 
-    persistence:
-      doctrine:
-        eventListeners:
-          Neos\Neos\EventLog\Integrations\EntityIntegrationService:
-            events:
-              - onFlush
-            listener: Neos\Neos\EventLog\Integrations\EntityIntegrationService
-          Neos\Neos\EventLog\Integrations\ContentRepositoryIntegrationService:
-            events:
-              - preFlush
-            listener: Neos\Neos\EventLog\Integrations\ContentRepositoryIntegrationService
-
     error:
       exceptionHandler:
         renderingGroups:
@@ -493,15 +471,13 @@ Neos:
               - Neos\Flow\Persistence\Doctrine\Exception\DatabaseException
               - Neos\Flow\Persistence\Doctrine\Exception\DatabaseConnectionException
               - Neos\Flow\Persistence\Doctrine\Exception\DatabaseStructureException
-            options: &welcomeTemplate
-              viewClassName: Neos\FluidAdaptor\View\StandaloneView
+            options:
+              viewClassName: Neos\Fusion\View\FusionView
               viewOptions:
-                templatePathAndFilename: 'resource://Neos.Neos/Private/Templates/Error/Welcome.html'
-                layoutRootPaths: ['resource://Neos.Neos/Private/Layouts/']
-          noHomepageException:
-            matchingExceptionClassNames:
-              - Neos\Neos\Routing\Exception\NoHomepageException
-            options: *welcomeTemplate
+                fusionPath: 'Neos/Fusion/DatabaseConnectionExceptions'
+                fusionPathPatterns: ['resource://Neos.Neos/Private/Fusion/Error/Root.fusion']
+                enableContentCache: false
+                templatePathAndFilename: ~
       debugger:
         ignoredClasses:
           Neos\\Neos\\Domain\\Service\\ContentContextFactory: true
@@ -512,11 +488,6 @@ Neos:
         neos-plugin: Plugins
 
   ContentRepository:
-    # This instructs neos to fallback to the given type if a node type can't be found (because it was removed or has
-    # been renamed for example). The default "Neos.Neos:FallbackNode" renders a warning in backend and is ignored
-    # in frontend rendering
-    fallbackNodeType: 'Neos.Neos:FallbackNode'
-
     # Definition of available content dimensions. Additional content dimensions may be defined in third-party packages
     # or via global settings.
     #
@@ -559,9 +530,10 @@ Neos:
       Neos.Node: Neos\Neos\Fusion\Helper\NodeHelper
       Neos.Link: Neos\Neos\Fusion\Helper\LinkHelper
       Neos.Array: Neos\Neos\Fusion\Helper\ArrayHelper
-      Neos.Rendering: Neos\Neos\Fusion\Helper\RenderingHelper
       Neos.Caching: Neos\Neos\Fusion\Helper\CachingHelper
+      Neos.Dimension: Neos\Neos\Fusion\Helper\DimensionHelper
       Neos.Backend: Neos\Neos\Fusion\Helper\BackendHelper
+      Neos.Site: Neos\Neos\Fusion\Helper\SiteHelper
 
   # DocTools is a tool used by Neos Developers to help with a variety of documentation tasks.
   # These settings are only used in generating Documentation.
@@ -663,19 +635,6 @@ Neos:
             namespaces:
               f: Neos\FluidAdaptor\ViewHelpers
               neos: Neos\Neos\ViewHelpers
-      'Neos:ContentRepositoryViewHelpers':
-        title: 'Content Repository ViewHelper Reference'
-        savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/ViewHelpers/ContentRepository.rst'
-        templatePathAndFilename: 'resource://Neos.DocTools/Private/Templates/ViewHelperReferenceTemplate.txt'
-        affectedClasses:
-          parentClassName: Neos\FluidAdaptor\Core\ViewHelper\AbstractViewHelper
-          classNamePattern: '/^Neos\\ContentRepository\\ViewHelpers\\.*$/i'
-        parser:
-          implementationClassName: Neos\DocTools\Domain\Service\FluidViewHelperClassParser
-          options:
-            namespaces:
-              f: Neos\FluidAdaptor\ViewHelpers
-              neos: Neos\Neos\ViewHelpers
       'Neos:FusionViewHelpers':
         title: 'Fusion ViewHelper Reference'
         savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/ViewHelpers/Fusion.rst'
@@ -740,15 +699,6 @@ Neos:
           includeAbstractClasses: true
         parser:
           implementationClassName: Neos\DocTools\Domain\Service\SignalsParser
-      'Neos:ContentRepositorySignals':
-        title: 'Content Repository Signals Reference'
-        savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/Signals/ContentRepository.rst'
-        affectedClasses:
-          classesContainingMethodsAnnotatedWith: Neos\Flow\Annotations\Signal
-          classNamePattern: '/^Neos\\ContentRepository\\.*$/i'
-          includeAbstractClasses: true
-        parser:
-          implementationClassName: Neos\DocTools\Domain\Service\SignalsParser
       'Neos:FlowQueryOperations':
         title: 'FlowQuery Operation Reference'
         savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/FlowQueryOperationReference.rst'
@@ -761,6 +711,7 @@ Neos:
         savePathAndFilename: '%FLOW_PATH_PACKAGES%Neos/Neos.Neos/Documentation/References/EelHelpersReference.rst'
         affectedClasses:
           interface: Neos\Eel\ProtectedContextAwareInterface
-          classNamePattern: '/^.*Helper$/i'
+          # exclude possible EEL helpers residing in `Neos.Ui` as they are internal
+          classNamePattern: '/^(?!Neos\\Neos\\Ui\\).*Helper$/i'
         parser:
           implementationClassName: Neos\DocTools\Domain\Service\EelHelperClassParser

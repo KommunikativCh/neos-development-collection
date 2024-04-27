@@ -1,0 +1,31 @@
+{
+    "name": "neos/contentrepository-export",
+    "type": "library",
+    "description": "Import/Export functionality for the Event Sourced Content Repository",
+    "support": {
+        "source": "https://github.com/neos/contentrepository-core.git",
+        "forum": "https://discuss.neos.io/",
+        "docs": "https://docs.neos.io/"
+    },
+    "require": {
+        "php": ">=8.2",
+        "neos/contentrepository-core": "self.version",
+        "league/flysystem": "^3",
+        "webmozart/assert": "^1.11"
+    },
+    "require-dev": {
+        "roave/security-advisories": "dev-latest",
+        "phpstan/phpstan": "^1.8"
+    },
+    "suggest": {
+        "league/flysystem-ziparchive": "to export zip archives",
+        "neos/media": "to import Assets",
+        "neos/escr-asset-usage": "to export used assets"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Neos\\ContentRepository\\Export\\": "src/"
+        }
+    }
+}

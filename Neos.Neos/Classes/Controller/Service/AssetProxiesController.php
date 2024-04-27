@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\Controller\Service;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,13 +10,17 @@ namespace Neos\Neos\Controller\Service;
  * source code.
  */
 
+declare(strict_types=1);
+
+namespace Neos\Neos\Controller\Service;
+
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Mvc\Controller\ActionController;
 use Neos\Flow\Mvc\Exception\StopActionException;
-use Neos\Flow\Mvc\Exception\UnsupportedRequestTypeException;
 use Neos\Flow\Mvc\View\ViewInterface;
 use Neos\FluidAdaptor\View\TemplateView;
 use Neos\Media\Domain\Model\AssetSource\AssetProxy\AssetProxyInterface;
+use Neos\Media\Domain\Model\AssetSource\Neos\NeosAssetNotFoundException;
 use Neos\Media\Domain\Model\Dto\AssetConstraints;
 use Neos\Media\Domain\Repository\AssetRepository;
 use Neos\Media\Domain\Service\AssetSourceService;
@@ -60,7 +63,7 @@ class AssetProxiesController extends ActionController
     protected $asyncThumbnails;
 
     /**
-     * @var array
+     * @var array<string,string>
      */
     protected $viewFormatToObjectNameMap = [
         'html' => TemplateView::class,
@@ -70,7 +73,7 @@ class AssetProxiesController extends ActionController
     /**
      * A list of IANA media types which are supported by this controller
      *
-     * @var array
+     * @var array<int,string>
      * @see http://www.iana.org/assignments/media-types/index.html
      */
     protected $supportedMediaTypes = [
@@ -82,7 +85,7 @@ class AssetProxiesController extends ActionController
      * @param ViewInterface $view
      * @return void
      */
-    public function initializeView(ViewInterface $view)
+    protected function initializeView(ViewInterface $view)
     {
         $view->assign('asyncThumbnails', $this->asyncThumbnails);
     }
@@ -96,7 +99,14 @@ class AssetProxiesController extends ActionController
      */
     public function indexAction(string $searchTerm = '', int $limit = 10): void
     {
-        $assetConstraints = $this->request->hasArgument('constraints') ? AssetConstraints::fromArray($this->request->getArgument('constraints')) : AssetConstraints::create();
+        $serializedAssetConstraints = $this->request->hasArgument('constraints')
+            ? $this->request->getArgument('constraints')
+            : null;
+        $assetConstraints = $serializedAssetConstraints
+            ? AssetConstraints::fromArray(is_array($serializedAssetConstraints)
+                ? $serializedAssetConstraints
+                : [$serializedAssetConstraints])
+            : AssetConstraints::create();
         $assetSources = $assetConstraints->applyToAssetSources($this->assetSourceService->getAssetSources());
 
         $assetProxyQueryResultsIterator = new \MultipleIterator(\MultipleIterator::MIT_NEED_ANY);
@@ -115,7 +125,7 @@ class AssetProxiesController extends ActionController
             foreach ($assetProxies as $assetProxy) {
                 if ($assetProxy instanceof AssetProxyInterface) {
                     $assetProxiesByAssetSource[$assetProxy->getAssetSource()->getIdentifier()][] = $assetProxy;
-                    $totalAddedResults ++;
+                    $totalAddedResults++;
                 }
                 if ($totalAddedResults === $limit) {
                     break 2;
@@ -132,7 +142,6 @@ class AssetProxiesController extends ActionController
      * @param string $assetProxyIdentifier
      * @return void
      * @throws StopActionException
-     * @throws UnsupportedRequestTypeException
      */
     public function showAction(string $assetSourceIdentifier, string $assetProxyIdentifier): void
     {
@@ -142,9 +151,10 @@ class AssetProxiesController extends ActionController
         }
 
         $assetProxyRepository = $assetSources[$assetSourceIdentifier]->getAssetProxyRepository();
-        $assetProxy = $assetProxyRepository->getAssetProxy($assetProxyIdentifier);
-        if (!$assetProxy) {
-            $this->throwStatus(404, 'Asset proxy not found');
+        try {
+            $assetProxy = $assetProxyRepository->getAssetProxy($assetProxyIdentifier);
+        } catch (NeosAssetNotFoundException $exception) {
+            $this->throwStatus(404, 'Asset not found');
         }
 
         $this->view->assign('assetProxy', $assetProxy);
@@ -156,7 +166,6 @@ class AssetProxiesController extends ActionController
      * @return void
      * @throws AssetSourceServiceException
      * @throws StopActionException
-     * @throws UnsupportedRequestTypeException
      */
     public function importAction(string $assetSourceIdentifier, string $assetProxyIdentifier): void
     {

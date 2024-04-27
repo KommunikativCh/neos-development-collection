@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\Controller\Backend;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,10 +10,15 @@ namespace Neos\Neos\Controller\Backend;
  * source code.
  */
 
+declare(strict_types=1);
+
+namespace Neos\Neos\Controller\Backend;
+
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Mvc\ActionResponse;
 use Neos\Flow\Mvc\Controller\ActionController;
 use Neos\Flow\Mvc\Dispatcher;
+use Neos\Flow\Security\Account;
 use Neos\Flow\Security\Context;
 use Neos\Utility\Arrays;
 use Neos\Utility\MediaTypes;
@@ -22,9 +26,7 @@ use Neos\Neos\Controller\BackendUserTranslationTrait;
 use Neos\Neos\Controller\Exception\DisabledModuleException;
 use Neos\Party\Domain\Service\PartyService;
 
-/**
- * @Flow\Scope("singleton")
- */
+#[Flow\Scope('singleton')]
 class ModuleController extends ActionController
 {
     use BackendUserTranslationTrait;
@@ -55,6 +57,7 @@ class ModuleController extends ActionController
 
     /**
      * @param array $module
+     * @phpstan-param array<string,mixed> $module
      * @return mixed
      * @throws DisabledModuleException
      */
@@ -67,7 +70,10 @@ class ModuleController extends ActionController
         if (isset($module['format'])) {
             $moduleRequest->setFormat($module['format']);
         }
-        if ($this->request->hasArgument($moduleRequest->getArgumentNamespace()) === true && is_array($this->request->getArgument($moduleRequest->getArgumentNamespace()))) {
+        if (
+            $this->request->hasArgument($moduleRequest->getArgumentNamespace()) === true
+            && is_array($this->request->getArgument($moduleRequest->getArgumentNamespace()))
+        ) {
             $moduleRequest->setArguments($this->request->getArgument($moduleRequest->getArgumentNamespace()));
         }
         foreach ($this->request->getPluginArguments() as $argumentNamespace => $argument) {
@@ -80,20 +86,23 @@ class ModuleController extends ActionController
         $moduleConfiguration['path'] = $module['module'];
 
         if (!$this->menuHelper->isModuleEnabled($moduleConfiguration['path'])) {
-            throw new DisabledModuleException(sprintf('The module "%s" is disabled. You can enable it with the "enabled" flag in Settings.yaml.', $module['module']), 1437148922);
+            throw new DisabledModuleException(sprintf(
+                'The module "%s" is disabled. You can enable it with the "enabled" flag in Settings.yaml.',
+                $module['module']
+            ), 1437148922);
         }
 
         $moduleBreadcrumb = [];
         $path = [];
         foreach ($modules as $moduleIdentifier) {
-            array_push($path, $moduleIdentifier);
+            $path[] = $moduleIdentifier;
             $config = Arrays::getValueByPath($this->settings['modules'], implode('.submodules.', $path));
             $moduleBreadcrumb[implode('/', $path)] = $config;
         }
 
         $moduleRequest->setArgument('__moduleConfiguration', $moduleConfiguration);
 
-        $moduleResponse = new ActionResponse($this->response);
+        $moduleResponse = new ActionResponse();
 
         $this->dispatcher->dispatch($moduleRequest, $moduleResponse);
 
@@ -106,14 +115,18 @@ class ModuleController extends ActionController
             }
             return $moduleResponse->getContent();
         } else {
-            $user = $this->partyService->getAssignedPartyOfAccount($this->securityContext->getAccount());
+            /** @var ?Account $authenticatedAccount */
+            $authenticatedAccount = $this->securityContext->getAccount();
+            $user = $authenticatedAccount === null ? null : $this->partyService->getAssignedPartyOfAccount($authenticatedAccount);
 
             $sites = $this->menuHelper->buildSiteList($this->controllerContext);
 
             $this->view->assignMultiple([
                 'moduleClass' => implode('-', $modules),
                 'moduleContents' => $moduleResponse->getContent(),
-                'title' => $moduleRequest->hasArgument('title') ? $moduleRequest->getArgument('title') : $moduleConfiguration['label'],
+                'title' => $moduleRequest->hasArgument('title')
+                    ? $moduleRequest->getArgument('title')
+                    : $moduleConfiguration['label'],
                 'rootModule' => array_shift($modules),
                 'submodule' => array_shift($modules),
                 'moduleConfiguration' => $moduleConfiguration,

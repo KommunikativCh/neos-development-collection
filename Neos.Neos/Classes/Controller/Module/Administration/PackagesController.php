@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Neos\Controller\Module\Administration;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -11,14 +10,16 @@ namespace Neos\Neos\Controller\Module\Administration;
  * source code.
  */
 
+declare(strict_types=1);
+
+namespace Neos\Neos\Controller\Module\Administration;
+
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Package;
 use Neos\Flow\Package\PackageManager;
 use Neos\Neos\Controller\Module\AbstractModuleController;
 
-/**
- * @Flow\Scope("singleton")
- */
+#[Flow\Scope('singleton')]
 class PackagesController extends AbstractModuleController
 {
     /**
@@ -36,7 +37,7 @@ class PackagesController extends AbstractModuleController
         foreach ($this->packageManager->getAvailablePackages() as $package) {
             /** @var Package $package */
             $packagePath = substr($package->getPackagepath(), strlen(FLOW_PATH_PACKAGES));
-            $packageGroup = substr($packagePath, 0, strpos($packagePath, '/'));
+            $packageGroup = substr($packagePath, 0, strpos($packagePath, '/') ?: null);
             $packageGroups[$packageGroup][$package->getPackageKey()] = [
                 'sanitizedPackageKey' => str_replace('.', '', $package->getPackageKey()),
                 'version' => $package->getInstalledVersion(),

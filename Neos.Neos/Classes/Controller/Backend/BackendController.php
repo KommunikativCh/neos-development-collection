@@ -1,7 +1,4 @@
 <?php
-declare(strict_types=1);
-
-namespace Neos\Neos\Controller\Backend;
 
 /*
  * This file is part of the Neos.Neos package.
@@ -13,6 +10,10 @@ namespace Neos\Neos\Controller\Backend;
  * source code.
  */
 
+declare(strict_types=1);
+
+namespace Neos\Neos\Controller\Backend;
+
 use Neos\Cache\Exception\InvalidDataException;
 use Neos\Flow\Annotations as Flow;
 use Neos\Cache\Frontend\StringFrontend;
@@ -20,7 +21,6 @@ use Neos\Flow\I18n\Exception\InvalidLocaleIdentifierException;
 use Neos\Flow\I18n\Locale;
 use Neos\Flow\Mvc\Controller\ActionController;
 use Neos\Flow\Mvc\Exception\StopActionException;
-use Neos\Flow\Mvc\Exception\UnsupportedRequestTypeException;
 use Neos\Flow\Mvc\Routing\Exception\MissingActionNameException;
 use Neos\Flow\Package\Exception\UnknownPackageException;
 use Neos\Flow\Persistence\Exception\IllegalObjectTypeException;
@@ -75,7 +75,6 @@ class BackendController extends ActionController
      * @return void
      * @throws MissingActionNameException
      * @throws StopActionException
-     * @throws UnsupportedRequestTypeException
      * @throws \Neos\Flow\Http\Exception
      * @throws IllegalObjectTypeException
      */
@@ -96,7 +95,6 @@ class BackendController extends ActionController
      * @throws \Neos\Cache\Exception
      * @throws InvalidDataException
      * @throws StopActionException
-     * @throws UnsupportedRequestTypeException
      * @throws MissingActionNameException
      * @throws SessionNotStartedException
      * @throws \Neos\Neos\Exception

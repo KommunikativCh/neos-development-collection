@@ -59,11 +59,11 @@ class HtmlAugmenter
      * Detects a unique root tag in the given $html string and returns its DOMNode representation - or NULL if no unique root element could be found
      *
      * @param string $html
-     * @return \DOMNode
+     * @return \DOMNode|null
      */
     protected function getHtmlRootElement($html)
     {
-        $html = trim($html);
+        $html = trim((string)$html);
         if ($html === '') {
             return null;
         }
@@ -99,7 +99,7 @@ class HtmlAugmenter
         /** @var $attribute \DOMAttr */
         foreach ($element->attributes as $attribute) {
             $oldAttributeValue = $attribute->hasChildNodes() ? $attribute->value : true;
-            $hasNewAttributeValue = array_key_exists($attribute->name, $newAttributes);
+            $hasNewAttributeValue = isset($newAttributes[$attribute->name]);
             $newAttributeValue = $newAttributes[$attribute->name] ?? null;
 
             if ($hasNewAttributeValue === false) {
