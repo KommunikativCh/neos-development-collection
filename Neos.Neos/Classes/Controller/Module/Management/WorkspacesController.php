@@ -240,7 +240,7 @@ class WorkspacesController extends AbstractModuleController
                     ContentStreamId::create(),
                     $visibility === 'private' ? $currentUserIdentifier : null
                 )
-            )->block();
+            );
         } catch (WorkspaceAlreadyExists $exception) {
             $this->addFlashMessage(
                 $this->getModuleLabel('workspaces.workspaceWithThisTitleAlreadyExists'),
@@ -319,7 +319,7 @@ class WorkspacesController extends AbstractModuleController
                     $title,
                     $description
                 )
-            )->block();
+            );
         }
 
         if ($workspace->workspaceOwner !== $workspaceOwner) {
@@ -328,7 +328,7 @@ class WorkspacesController extends AbstractModuleController
                     $workspaceName,
                     $workspaceOwner ?: null,
                 )
-            )->block();
+            );
         }
 
         $this->addFlashMessage($this->translator->translateById(
@@ -428,7 +428,7 @@ class WorkspacesController extends AbstractModuleController
             DeleteWorkspace::create(
                 $workspaceName,
             )
-        )->block();
+        );
 
         $this->addFlashMessage($this->translator->translateById(
             'workspaces.workspaceHasBeenRemoved',
@@ -457,8 +457,8 @@ class WorkspacesController extends AbstractModuleController
             throw new \RuntimeException('No account is authenticated', 1710068880);
         }
         $personalWorkspaceName = WorkspaceNameBuilder::fromAccountIdentifier($currentAccount->getAccountIdentifier());
-        $personalWorkspace = $contentRepository->getWorkspaceFinder()->findOneByName($personalWorkspaceName);
         /** @var Workspace $personalWorkspace */
+        $personalWorkspace = $contentRepository->getWorkspaceFinder()->findOneByName($personalWorkspaceName);
 
         /** @todo do something else
          * if ($personalWorkspace !== $targetWorkspace) {
@@ -481,8 +481,8 @@ class WorkspacesController extends AbstractModuleController
 
         $targetNodeAddressInPersonalWorkspace = new NodeAddress(
             $personalWorkspace->currentContentStreamId,
-            $targetNode->subgraphIdentity->dimensionSpacePoint,
-            $targetNode->nodeAggregateId,
+            $targetNode->dimensionSpacePoint,
+            $targetNode->aggregateId,
             $personalWorkspace->workspaceName
         );
 
@@ -531,7 +531,7 @@ class WorkspacesController extends AbstractModuleController
             ),
         );
         $contentRepository->handle($command)
-            ->block();
+            ;
 
         $this->addFlashMessage($this->translator->translateById(
             'workspaces.selectedChangeHasBeenPublished',
@@ -568,7 +568,7 @@ class WorkspacesController extends AbstractModuleController
             ),
         );
         $contentRepository->handle($command)
-            ->block();
+            ;
 
         $this->addFlashMessage($this->translator->translateById(
             'workspaces.selectedChangeHasBeenDiscarded',
@@ -611,7 +611,7 @@ class WorkspacesController extends AbstractModuleController
                     NodeIdsToPublishOrDiscard::create(...$nodesToPublishOrDiscard),
                 );
                 $contentRepository->handle($command)
-                    ->block();
+                    ;
                 $this->addFlashMessage($this->translator->translateById(
                     'workspaces.selectedChangesHaveBeenPublished',
                     [],
@@ -627,7 +627,7 @@ class WorkspacesController extends AbstractModuleController
                     NodeIdsToPublishOrDiscard::create(...$nodesToPublishOrDiscard),
                 );
                 $contentRepository->handle($command)
-                    ->block();
+                    ;
                 $this->addFlashMessage($this->translator->translateById(
                     'workspaces.selectedChangesHaveBeenDiscarded',
                     [],
@@ -750,8 +750,7 @@ class WorkspacesController extends AbstractModuleController
             );
 
         foreach ($changes as $change) {
-            $contentStreamId = $change->contentStreamId;
-
+            $workspaceName = $selectedWorkspace->workspaceName;
             if ($change->deleted) {
                 // If we deleted a node, there is no way for us to anymore find the deleted node in the ContentStream
                 // where the node was deleted.
@@ -759,10 +758,9 @@ class WorkspacesController extends AbstractModuleController
                 //
                 // This is safe because the UI basically shows what would be removed once the deletion is published.
                 $baseWorkspace = $this->getBaseWorkspaceWhenSureItExists($selectedWorkspace, $contentRepository);
-                $contentStreamId = $baseWorkspace->currentContentStreamId;
+                $workspaceName = $baseWorkspace->workspaceName;
             }
-            $subgraph = $contentRepository->getContentGraph()->getSubgraph(
-                $contentStreamId,
+            $subgraph = $contentRepository->getContentGraph($workspaceName)->getSubgraph(
                 $change->originDimensionSpacePoint->toDimensionSpacePoint(),
                 VisibilityConstraints::withoutRestrictions()
             );
@@ -772,7 +770,7 @@ class WorkspacesController extends AbstractModuleController
                 $documentNode = null;
                 $siteNode = null;
                 $ancestors = $subgraph->findAncestorNodes(
-                    $node->nodeAggregateId,
+                    $node->aggregateId,
                     FindAncestorNodesFilter::create()
                 );
                 $ancestors = Nodes::fromArray([$node])->merge($ancestors);
@@ -780,7 +778,7 @@ class WorkspacesController extends AbstractModuleController
                 $nodePathSegments = [];
                 $documentPathSegments = [];
                 foreach ($ancestors as $ancestor) {
-                    $pathSegment = $ancestor->nodeName ?: NodeName::fromString($ancestor->nodeAggregateId->value);
+                    $pathSegment = $ancestor->name ?: NodeName::fromString($ancestor->aggregateId->value);
                     // Don't include `sites` path as they are not needed
                     // by the HTML/JS magic and won't be included as `$documentPathSegments`
                     if (!$this->getNodeType($ancestor)->isOfType(NodeTypeNameFactory::NAME_SITES)) {
@@ -799,8 +797,8 @@ class WorkspacesController extends AbstractModuleController
 
                 // Neither $documentNode, $siteNode or its cannot really be null, this is just for type checks;
                 // We should probably throw an exception though
-                if ($documentNode !== null && $siteNode !== null && $siteNode->nodeName) {
-                    $siteNodeName = $siteNode->nodeName->value;
+                if ($documentNode !== null && $siteNode !== null && $siteNode->name) {
+                    $siteNodeName = $siteNode->name->value;
                     // Reverse `$documentPathSegments` to start with the site node.
                     // The paths are used for grouping the nodes and for selecting a tree of nodes.
                     $documentPath = implode('/', array_reverse(array_map(
@@ -872,17 +870,14 @@ class WorkspacesController extends AbstractModuleController
      */
     protected function getOriginalNode(
         Node $modifiedNode,
-        ContentStreamId $baseContentStreamId,
+        WorkspaceName $baseWorkspaceName,
         ContentRepository $contentRepository,
     ): ?Node {
-        $baseSubgraph = $contentRepository->getContentGraph()->getSubgraph(
-            $baseContentStreamId,
-            $modifiedNode->subgraphIdentity->dimensionSpacePoint,
+        $baseSubgraph = $contentRepository->getContentGraph($baseWorkspaceName)->getSubgraph(
+            $modifiedNode->dimensionSpacePoint,
             VisibilityConstraints::withoutRestrictions()
         );
-        $node = $baseSubgraph->findNodeById($modifiedNode->nodeAggregateId);
-
-        return $node;
+        return $baseSubgraph->findNodeById($modifiedNode->aggregateId);
     }
 
     /**
@@ -902,8 +897,7 @@ class WorkspacesController extends AbstractModuleController
         $originalNode = null;
         if ($currentWorkspace !== null) {
             $baseWorkspace = $this->getBaseWorkspaceWhenSureItExists($currentWorkspace, $contentRepository);
-            $baseContentStreamId = $baseWorkspace->currentContentStreamId;
-            $originalNode = $this->getOriginalNode($changedNode, $baseContentStreamId, $contentRepository);
+            $originalNode = $this->getOriginalNode($changedNode, $baseWorkspace->workspaceName, $contentRepository);
         }
 
 
@@ -914,7 +908,7 @@ class WorkspacesController extends AbstractModuleController
         $renderer = new HtmlArrayRenderer();
         foreach ($changedNode->properties as $propertyName => $changedPropertyValue) {
             if (
-                $originalNode === null && empty($changedPropertyValue)
+                ($originalNode === null && empty($changedPropertyValue))
                 || (
                     isset($changeNodePropertiesDefaults[$propertyName])
                     && $changedPropertyValue === $changeNodePropertiesDefaults[$propertyName]

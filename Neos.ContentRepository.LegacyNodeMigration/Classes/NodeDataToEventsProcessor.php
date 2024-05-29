@@ -15,15 +15,11 @@ use Neos\ContentRepository\Core\DimensionSpace\OriginDimensionSpacePointSet;
 use Neos\ContentRepository\Core\DimensionSpace\VariantType;
 use Neos\ContentRepository\Core\EventStore\EventInterface;
 use Neos\ContentRepository\Core\EventStore\EventNormalizer;
+use Neos\ContentRepository\Core\Feature\Common\InterdimensionalSibling;
 use Neos\ContentRepository\Core\Feature\Common\InterdimensionalSiblings;
 use Neos\ContentRepository\Core\Feature\NodeCreation\Event\NodeAggregateWithNodeWasCreated;
 use Neos\ContentRepository\Core\Feature\NodeModification\Dto\PropertyValuesToWrite;
 use Neos\ContentRepository\Core\Feature\NodeModification\Event\NodePropertiesWereSet;
-use Neos\ContentRepository\Core\Feature\NodeMove\Dto\CoverageNodeMoveMapping;
-use Neos\ContentRepository\Core\Feature\NodeMove\Dto\CoverageNodeMoveMappings;
-use Neos\ContentRepository\Core\Feature\NodeMove\Dto\OriginNodeMoveMapping;
-use Neos\ContentRepository\Core\Feature\NodeMove\Dto\OriginNodeMoveMappings;
-use Neos\ContentRepository\Core\Feature\NodeMove\Dto\SucceedingSiblingNodeMoveDestination;
 use Neos\ContentRepository\Core\Feature\NodeMove\Event\NodeAggregateWasMoved;
 use Neos\ContentRepository\Core\Feature\NodeReferencing\Dto\SerializedNodeReferences;
 use Neos\ContentRepository\Core\Feature\NodeReferencing\Event\NodeReferencesWereSet;
@@ -45,6 +41,7 @@ use Neos\ContentRepository\Core\SharedModel\Node\NodeName;
 use Neos\ContentRepository\Core\SharedModel\Node\PropertyNames;
 use Neos\ContentRepository\Core\SharedModel\Node\ReferenceName;
 use Neos\ContentRepository\Core\SharedModel\Workspace\ContentStreamId;
+use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepository\Export\Event\ValueObject\ExportedEvent;
 use Neos\ContentRepository\Export\ProcessorInterface;
 use Neos\ContentRepository\Export\ProcessorResult;
@@ -66,6 +63,7 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
      */
     private array $callbacks = [];
     private NodeTypeName $sitesNodeTypeName;
+    private WorkspaceName $workspaceName;
     private ContentStreamId $contentStreamId;
     private VisitedNodeAggregates $visitedNodes;
 
@@ -97,6 +95,7 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
     ) {
         $this->sitesNodeTypeName = NodeTypeNameFactory::forSites();
         $this->contentStreamId = ContentStreamId::create();
+        $this->workspaceName = WorkspaceName::forLive();
         $this->visitedNodes = new VisitedNodeAggregates();
     }
 
@@ -130,7 +129,7 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
             if ($nodeDataRow['path'] === '/sites') {
                 $sitesNodeAggregateId = NodeAggregateId::fromString($nodeDataRow['identifier']);
                 $this->visitedNodes->addRootNode($sitesNodeAggregateId, $this->sitesNodeTypeName, NodePath::fromString('/sites'), $this->interDimensionalVariationGraph->getDimensionSpacePoints());
-                $this->exportEvent(new RootNodeAggregateWithNodeWasCreated($this->contentStreamId, $sitesNodeAggregateId, $this->sitesNodeTypeName, $this->interDimensionalVariationGraph->getDimensionSpacePoints(), NodeAggregateClassification::CLASSIFICATION_ROOT));
+                $this->exportEvent(new RootNodeAggregateWithNodeWasCreated($this->workspaceName, $this->contentStreamId, $sitesNodeAggregateId, $this->sitesNodeTypeName, $this->interDimensionalVariationGraph->getDimensionSpacePoints(), NodeAggregateClassification::CLASSIFICATION_ROOT));
                 continue;
             }
             if ($this->metaDataExported === false && $nodeDataRow['parentpath'] === '/sites') {
@@ -170,11 +169,12 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
 
     private function exportEvent(EventInterface $event): void
     {
+        $normalizedEvent = $this->eventNormalizer->normalize($event);
         $exportedEvent = new ExportedEvent(
-            Uuid::uuid4()->toString(),
-            $this->eventNormalizer->getEventType($event)->value,
-            json_decode($this->eventNormalizer->getEventData($event)->value, true),
-            []
+            $normalizedEvent->id->value,
+            $normalizedEvent->type->value,
+            json_decode($normalizedEvent->data->value, true),
+            [],
         );
         assert($this->eventFileResource !== null);
         fwrite($this->eventFileResource, $exportedEvent->toJson() . chr(10));
@@ -282,6 +282,7 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
             $specializations = $this->interDimensionalVariationGraph->getSpecializationSet($originDimensionSpacePoint->toDimensionSpacePoint(), true, $this->visitedNodes->alreadyVisitedOriginDimensionSpacePoints($nodeAggregateId)->toDimensionSpacePointSet());
             $this->exportEvent(
                 new NodeAggregateWithNodeWasCreated(
+                    $this->workspaceName,
                     $this->contentStreamId,
                     $nodeAggregateId,
                     $nodeTypeName,
@@ -300,6 +301,7 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
             // create node aggregate
             $this->exportEvent(
                 new NodeAggregateWithNodeWasCreated(
+                    $this->workspaceName,
                     $this->contentStreamId,
                     $nodeAggregateId,
                     $nodeTypeName,
@@ -318,10 +320,10 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
         }
         // nodes are hidden via SubtreeWasTagged event
         if ($this->isNodeHidden($nodeDataRow)) {
-            $this->exportEvent(new SubtreeWasTagged($this->contentStreamId, $nodeAggregateId, $this->interDimensionalVariationGraph->getSpecializationSet($originDimensionSpacePoint->toDimensionSpacePoint(), true, $this->visitedNodes->alreadyVisitedOriginDimensionSpacePoints($nodeAggregateId)->toDimensionSpacePointSet()), SubtreeTag::disabled()));
+            $this->exportEvent(new SubtreeWasTagged($this->workspaceName, $this->contentStreamId, $nodeAggregateId, $this->interDimensionalVariationGraph->getSpecializationSet($originDimensionSpacePoint->toDimensionSpacePoint(), true, $this->visitedNodes->alreadyVisitedOriginDimensionSpacePoints($nodeAggregateId)->toDimensionSpacePointSet()), SubtreeTag::disabled()));
         }
         foreach ($serializedPropertyValuesAndReferences->references as $referencePropertyName => $destinationNodeAggregateIds) {
-            $this->nodeReferencesWereSetEvents[] = new NodeReferencesWereSet($this->contentStreamId, $nodeAggregateId, new OriginDimensionSpacePointSet([$originDimensionSpacePoint]), ReferenceName::fromString($referencePropertyName), SerializedNodeReferences::fromNodeAggregateIds($destinationNodeAggregateIds));
+            $this->nodeReferencesWereSetEvents[] = new NodeReferencesWereSet($this->workspaceName, $this->contentStreamId, $nodeAggregateId, new OriginDimensionSpacePointSet([$originDimensionSpacePoint]), ReferenceName::fromString($referencePropertyName), SerializedNodeReferences::fromNodeAggregateIds($destinationNodeAggregateIds));
         }
 
         $this->visitedNodes->add($nodeAggregateId, new DimensionSpacePointSet([$originDimensionSpacePoint->toDimensionSpacePoint()]), $nodeTypeName, $nodePath, $parentNodeAggregate->nodeAggregateId);
@@ -376,9 +378,9 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
             }
         }
 
-        // hiddenInIndex is stored as separate column in the nodedata table, but we need it as (internal) property
+        // hiddenInIndex is stored as separate column in the nodedata table, but we need it as property
         if ($nodeDataRow['hiddeninindex']) {
-            $properties['_hiddenInIndex'] = true;
+            $properties['hiddenInMenu'] = true;
         }
 
         if ($nodeType->isOfType(NodeTypeName::fromString('Neos.TimeableNodeVisibility:Timeable'))) {
@@ -416,6 +418,7 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
             $variantType = $this->interDimensionalVariationGraph->getVariantType($originDimensionSpacePoint->toDimensionSpacePoint(), $alreadyVisitedOriginDimensionSpacePoint->toDimensionSpacePoint());
             $variantCreatedEvent = match ($variantType) {
                 VariantType::TYPE_SPECIALIZATION => new NodeSpecializationVariantWasCreated(
+                    $this->workspaceName,
                     $this->contentStreamId,
                     $nodeAggregateId,
                     $alreadyVisitedOriginDimensionSpacePoint,
@@ -425,6 +428,7 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
                     )
                 ),
                 VariantType::TYPE_GENERALIZATION => new NodeGeneralizationVariantWasCreated(
+                    $this->workspaceName,
                     $this->contentStreamId,
                     $nodeAggregateId,
                     $alreadyVisitedOriginDimensionSpacePoint,
@@ -434,6 +438,7 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
                     )
                 ),
                 VariantType::TYPE_PEER => new NodePeerVariantWasCreated(
+                    $this->workspaceName,
                     $this->contentStreamId,
                     $nodeAggregateId,
                     $alreadyVisitedOriginDimensionSpacePoint,
@@ -456,6 +461,7 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
         if ($serializedPropertyValuesAndReferences->serializedPropertyValues->count() > 0) {
             $this->exportEvent(
                 new NodePropertiesWereSet(
+                    $this->workspaceName,
                     $this->contentStreamId,
                     $nodeAggregateId,
                     $originDimensionSpacePoint,
@@ -473,25 +479,16 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
             !$parentNodeAggregate->nodeAggregateId->equals($nodeAggregate->getVariant($variantSourceOriginDimensionSpacePoint)->parentNodeAggregateId)
         ) {
             $this->exportEvent(new NodeAggregateWasMoved(
+                $this->workspaceName,
                 $this->contentStreamId,
                 $nodeAggregateId,
-                OriginNodeMoveMappings::fromArray([
-                    new OriginNodeMoveMapping(
-                        $originDimensionSpacePoint,
-                        CoverageNodeMoveMappings::create(
-                            CoverageNodeMoveMapping::createForNewSucceedingSibling(
-                                $originDimensionSpacePoint->toDimensionSpacePoint(),
-                                SucceedingSiblingNodeMoveDestination::create(
-                                    $parentNodeAggregate->nodeAggregateId,
-                                    $variantSourceOriginDimensionSpacePoint,
-
-                                    $nodeAggregate->getVariant($variantSourceOriginDimensionSpacePoint)->parentNodeAggregateId,
-                                    $nodeAggregate->getVariant($variantSourceOriginDimensionSpacePoint)->originDimensionSpacePoint
-                                )
-                            )
-                        )
+                $parentNodeAggregate->nodeAggregateId,
+                new InterdimensionalSiblings(
+                    new InterdimensionalSibling(
+                        $originDimensionSpacePoint->toDimensionSpacePoint(),
+                        null
                     )
-                ])
+                )
             ));
         }
     }
@@ -502,7 +499,7 @@ final class NodeDataToEventsProcessor implements ProcessorInterface
         if (!$nodeTypeOfParent) {
             return false;
         }
-        return $nodeTypeOfParent->hasTetheredNode($nodeName);
+        return $nodeTypeOfParent->tetheredNodeTypeDefinitions->contain($nodeName);
     }
 
     private function dispatch(Severity $severity, string $message, mixed ...$args): void

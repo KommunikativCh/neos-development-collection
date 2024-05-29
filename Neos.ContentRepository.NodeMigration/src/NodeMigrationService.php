@@ -78,7 +78,7 @@ readonly class NodeMigrationService implements ContentRepositoryServiceInterface
                     WorkspaceDescription::fromString(''),
                     $contentStreamForWriting,
                 )
-            )->block();
+            );
             /** array $migrationDescription */
             $this->executeSubMigrationAndBlock(
                 $migrationDescription,
@@ -130,10 +130,10 @@ readonly class NodeMigrationService implements ContentRepositoryServiceInterface
         if ($transformations->containsGlobal()) {
             $transformations->executeGlobalAndBlock($workspaceNameForWriting);
         } elseif ($transformations->containsNodeAggregateBased()) {
-            foreach ($this->contentRepository->getContentGraph()->findUsedNodeTypeNames() as $nodeTypeName) {
+            $contentGraph = $this->contentRepository->getContentGraph($workspaceForReading->workspaceName);
+            foreach ($contentGraph->findUsedNodeTypeNames() as $nodeTypeName) {
                 foreach (
-                    $this->contentRepository->getContentGraph()->findNodeAggregatesByType(
-                        $workspaceForReading->currentContentStreamId,
+                    $contentGraph->findNodeAggregatesByType(
                         $nodeTypeName
                     ) as $nodeAggregate
                 ) {
@@ -143,10 +143,10 @@ readonly class NodeMigrationService implements ContentRepositoryServiceInterface
                 }
             }
         } elseif ($transformations->containsNodeBased()) {
-            foreach ($this->contentRepository->getContentGraph()->findUsedNodeTypeNames() as $nodeTypeName) {
+            $contentGraph = $this->contentRepository->getContentGraph($workspaceForReading->workspaceName);
+            foreach ($contentGraph->findUsedNodeTypeNames() as $nodeTypeName) {
                 foreach (
-                    $this->contentRepository->getContentGraph()->findNodeAggregatesByType(
-                        $workspaceForReading->currentContentStreamId,
+                    $contentGraph->findNodeAggregatesByType(
                         $nodeTypeName
                     ) as $nodeAggregate
                 ) {
